@@ -7,12 +7,16 @@ import (
 	"github.com/deplagene/revenueleakageengine/internal/platform/kafka"
 )
 
+// Middleware wraps a message handler with transport-level behavior such as
+// tracing, metrics, or panic recovery.
 type Middleware func(next kafka.MessageHandler) kafka.MessageHandler
 
 type groupHandler struct {
 	handler kafka.MessageHandler
 }
 
+// NewGroupHandler constructs a Sarama consumer-group handler and applies
+// middleware in reverse registration order.
 func NewGroupHandler(handler kafka.MessageHandler, middlewares ...Middleware) *groupHandler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		handler = middlewares[i](handler)
@@ -23,15 +27,18 @@ func NewGroupHandler(handler kafka.MessageHandler, middlewares ...Middleware) *g
 	}
 }
 
+// Setup is called by Sarama when a new consumer group session starts.
 func (g *groupHandler) Setup(sarama.ConsumerGroupSession) error {
 	return nil
 }
 
+// Cleanup is called by Sarama before the current consumer group session ends.
 func (g *groupHandler) Cleanup(sarama.ConsumerGroupSession) error {
 	return nil
 }
 
-// TODO: add logging
+// ConsumeClaim reads messages from a claimed partition, forwards them to the
+// handler, and marks only successfully processed messages.
 func (g *groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	const op = "platform.kafka.consumer.grouphandler"
 
@@ -73,6 +80,8 @@ func (g *groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 	}
 }
 
+// extractHeaders converts Kafka record headers into a map for easier handler
+// consumption.
 func extractHeaders(headers []*sarama.RecordHeader) map[string][]byte {
 	result := make(map[string][]byte)
 	for _, h := range headers {

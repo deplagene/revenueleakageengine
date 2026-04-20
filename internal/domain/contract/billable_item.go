@@ -2,6 +2,7 @@ package contract
 
 import "github.com/google/uuid"
 
+// PricingMode describes how a billable item should be monetized.
 type PricingMode string
 
 const (
@@ -10,6 +11,8 @@ const (
 	PricingModeTiered PricingMode = "tiered"
 )
 
+// BillableItemStatus indicates whether a billable item can be used in active
+// contract and billing flows.
 type BillableItemStatus string
 
 const (
@@ -17,6 +20,8 @@ const (
 	BillableItemStatusInactive BillableItemStatus = "inactive"
 )
 
+// BillableItem identifies the product, service, or metric that can generate
+// revenue for a tenant.
 type BillableItem struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

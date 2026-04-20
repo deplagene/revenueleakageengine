@@ -1,3 +1,5 @@
+// Package contract defines commercial truth such as contracts, billable items,
+// and contract terms used to calculate expected revenue.
 package contract
 
 import (
@@ -6,6 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Status represents the lifecycle state of a contract.
 type Status string
 
 const (
@@ -15,6 +18,7 @@ const (
 	StatusCancelled Status = "cancelled"
 )
 
+// BillingModel identifies the pricing pattern used by a contract.
 type BillingModel string
 
 const (
@@ -22,6 +26,8 @@ const (
 	BillingModelUsageBased     BillingModel = "usage_based"
 )
 
+// Contract stores the commercial agreement that defines how revenue should be
+// earned from a customer account.
 type Contract struct {
 	ID           uuid.UUID
 	TenantID     uuid.UUID

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// Category classifies the broad operational reason behind a leakage case.
 type Category string
 
 const (
@@ -20,6 +21,7 @@ const (
 	CategorySLACompensationGap     Category = "sla_compensation_logic_gap"
 )
 
+// DerivedBy identifies which mechanism produced a root-cause hypothesis.
 type DerivedBy string
 
 const (
@@ -28,6 +30,8 @@ const (
 	DerivedByHuman DerivedBy = "human"
 )
 
+// RootCause captures the most likely explanation for why a leakage case
+// occurred.
 type RootCause struct {
 	ID              uuid.UUID
 	CaseID          uuid.UUID

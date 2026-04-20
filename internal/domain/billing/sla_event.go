@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// SLAEvent describes an outage or service-quality event that may trigger a
+// credit, penalty, or investigation.
 type SLAEvent struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

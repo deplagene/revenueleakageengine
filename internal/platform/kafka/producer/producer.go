@@ -1,3 +1,4 @@
+// Package producer provides a Sarama-backed Kafka publisher implementation.
 package producer
 
 import (
@@ -12,12 +13,15 @@ type producer struct {
 	syncProducer sarama.SyncProducer
 }
 
+// NewProducer builds a synchronous Kafka producer backed by Sarama.
 func NewProducer(syncProducer sarama.SyncProducer) *producer {
 	return &producer{
 		syncProducer: syncProducer,
 	}
 }
 
+// Send validates an outbound message, checks the context before publish, and
+// forwards the record to Kafka with headers preserved.
 func (p *producer) Send(ctx context.Context, msg kafka.OutboundMessage) error {
 	const op = "platform.kafka.producer.Send"
 
@@ -46,6 +50,8 @@ func (p *producer) Send(ctx context.Context, msg kafka.OutboundMessage) error {
 	return nil
 }
 
+// toRecordHeaders converts header maps into the Sarama representation used for
+// outbound Kafka messages.
 func toRecordHeaders(headers map[string][]byte) []sarama.RecordHeader {
 	if len(headers) == 0 {
 		return nil

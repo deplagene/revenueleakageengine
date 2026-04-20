@@ -1,3 +1,5 @@
+// Package billing defines normalized billing-side facts such as invoices, usage,
+// adjustments, and SLA events that describe what financially happened.
 package billing
 
 import (
@@ -7,6 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// InvoiceStatus captures the lifecycle state of an invoice.
 type InvoiceStatus string
 
 const (
@@ -17,6 +20,8 @@ const (
 	InvoiceStatusOverdue InvoiceStatus = "overdue"
 )
 
+// Invoice represents an issued billing document for a contract and billing
+// period.
 type Invoice struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
@@ -31,6 +36,8 @@ type Invoice struct {
 	Status      InvoiceStatus
 }
 
+// InvoiceLine represents one billable row inside an invoice together with the
+// pricing snapshot used to produce it.
 type InvoiceLine struct {
 	ID              uuid.UUID
 	InvoiceID       uuid.UUID

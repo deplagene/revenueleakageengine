@@ -6,9 +6,11 @@ import (
 	"time"
 )
 
+// ErrTopicRequired reports that an outbound Kafka message was built without a topic.
 var ErrTopicRequired = errors.New("topic is required")
 
-// Message — универсальная обёртка над сообщением Kafka.
+// Message wraps a Kafka record together with transport metadata needed by
+// consumers and middleware.
 type Message struct {
 	Headers        map[string][]byte
 	Timestamp      time.Time
@@ -29,6 +31,8 @@ type OutboundMessage struct {
 	Topic   string
 }
 
+// Validate checks that an outbound message contains the minimum transport
+// metadata required for publishing.
 func (m OutboundMessage) Validate() error {
 	if strings.TrimSpace(m.Topic) == "" {
 		return ErrTopicRequired

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// TermType classifies the rule encoded by a contract term.
 type TermType string
 
 const (
@@ -22,6 +23,8 @@ const (
 	TermTypeInvoiceSchedule   TermType = "invoice_schedule"
 )
 
+// Term stores one effective contract rule such as a price, discount, or SLA
+// credit condition.
 type Term struct {
 	ID            uuid.UUID
 	ContractID    uuid.UUID

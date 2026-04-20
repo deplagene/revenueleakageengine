@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// EvidenceType classifies the proof attached to a leakage case.
 type EvidenceType string
 
 const (
@@ -18,6 +19,7 @@ const (
 	EvidenceTypeTimelineEvent     EvidenceType = "timeline_event"
 )
 
+// Evidence stores the raw or aggregated facts that justify a leakage case.
 type Evidence struct {
 	ID         uuid.UUID
 	CaseID     uuid.UUID

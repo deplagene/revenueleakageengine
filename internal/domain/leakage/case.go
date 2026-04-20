@@ -1,3 +1,5 @@
+// Package leakage defines investigation artifacts created when expected and
+// actual revenue diverge in a meaningful way.
 package leakage
 
 import (
@@ -7,6 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// CaseType identifies the mismatch pattern detected during reconciliation.
 type CaseType string
 
 const (
@@ -22,6 +25,7 @@ const (
 	CaseTypePricingRuleMisapplied       CaseType = "pricing_rule_misapplied"
 )
 
+// Severity expresses the business urgency of a leakage case.
 type Severity string
 
 const (
@@ -31,6 +35,7 @@ const (
 	SeverityCritical Severity = "critical"
 )
 
+// Status represents the investigation lifecycle state of a leakage case.
 type Status string
 
 const (
@@ -40,6 +45,7 @@ const (
 	StatusDismissed     Status = "dismissed"
 )
 
+// Case is the primary investigation record created from a revenue mismatch.
 type Case struct {
 	ID                uuid.UUID
 	TenantID          uuid.UUID

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// RecognizedFrom identifies which source fact produced an actual revenue entry.
 type RecognizedFrom string
 
 const (
@@ -15,6 +16,8 @@ const (
 	RecognizedFromAdjustment RecognizedFrom = "adjustment"
 )
 
+// ActualRevenueEntry records what was actually billed, collected, or adjusted
+// for a contract and billing period.
 type ActualRevenueEntry struct {
 	ID             uuid.UUID
 	TenantID       uuid.UUID

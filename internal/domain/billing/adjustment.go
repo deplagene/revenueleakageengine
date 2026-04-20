@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// AdjustmentType classifies financial corrections that change actual revenue.
 type AdjustmentType string
 
 const (
@@ -18,6 +19,8 @@ const (
 	AdjustmentTypeCorrection   AdjustmentType = "correction"
 )
 
+// Adjustment records a refund, credit, write-off, or other financial change
+// that must be reflected in actual revenue calculations.
 type Adjustment struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID

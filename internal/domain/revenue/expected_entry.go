@@ -1,3 +1,5 @@
+// Package revenue defines expected and actual revenue ledgers together with the
+// resulting revenue differences used by reconciliation.
 package revenue
 
 import (
@@ -7,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// ExpectedRevenueEntry records what the platform believes should have been
+// earned for a contract and billing period.
 type ExpectedRevenueEntry struct {
 	ID               uuid.UUID
 	TenantID         uuid.UUID

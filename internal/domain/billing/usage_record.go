@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// UsageRecord captures billable consumption imported from an external metering
+// or product system.
 type UsageRecord struct {
 	ID             uuid.UUID
 	TenantID       uuid.UUID
