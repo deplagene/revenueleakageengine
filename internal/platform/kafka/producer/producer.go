@@ -40,7 +40,6 @@ func (p *producer) Send(ctx context.Context, msg kafka.OutboundMessage) error {
 		Value:   sarama.ByteEncoder(msg.Value),
 		Headers: toRecordHeaders(msg.Headers),
 	})
-
 	if err != nil {
 		return fmt.Errorf("could not send message: %s: %w", op, err)
 	}
