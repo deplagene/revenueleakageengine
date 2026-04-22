@@ -129,8 +129,10 @@ func (f *fakeClaim) Messages() <-chan *sarama.ConsumerMessage {
 	return f.messages
 }
 
-var _ sarama.ConsumerGroupSession = (*fakeConsumerGroupSession)(nil)
-var _ sarama.ConsumerGroupClaim = (*fakeClaim)(nil)
+var (
+	_ sarama.ConsumerGroupSession = (*fakeConsumerGroupSession)(nil)
+	_ sarama.ConsumerGroupClaim   = (*fakeClaim)(nil)
+)
 
 func TestExtractHeaders(t *testing.T) {
 	headers := extractHeaders([]*sarama.RecordHeader{
