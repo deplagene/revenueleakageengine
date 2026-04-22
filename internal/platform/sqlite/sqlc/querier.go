@@ -10,6 +10,8 @@ import (
 
 type Querier interface {
 	CompleteReconciliationRun(ctx context.Context, arg CompleteReconciliationRunParams) error
+	CreateActualRevenueEntry(ctx context.Context, arg CreateActualRevenueEntryParams) error
+	CreateExpectedRevenueEntry(ctx context.Context, arg CreateExpectedRevenueEntryParams) error
 	CreateLeakageCase(ctx context.Context, arg CreateLeakageCaseParams) error
 	CreateLeakageEvidence(ctx context.Context, arg CreateLeakageEvidenceParams) error
 	CreateReconciliationRun(ctx context.Context, arg CreateReconciliationRunParams) error
