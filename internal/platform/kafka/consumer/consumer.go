@@ -45,7 +45,7 @@ func (c *consumer) Consume(ctx context.Context, handler kafka.MessageHandler) er
 		}
 
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return fmt.Errorf("context cancelled: %w", ctx.Err())
 		}
 
 		// logger
