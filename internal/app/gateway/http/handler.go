@@ -1,2 +1,104 @@
 // Package http contains HTTP delivery handlers and DTO mapping for the gateway.
 package http
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	stdhttp "net/http"
+
+	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
+	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
+	"github.com/go-chi/chi/v5"
+)
+
+// ErrReconciliationRunnerRequired reports that HTTP routes were created
+// without a reconciliation application dependency.
+var ErrReconciliationRunnerRequired = errors.New("reconciliation runner is required")
+
+// ErrCaseQueriesRequired reports that HTTP routes were created without a case
+// query dependency.
+var ErrCaseQueriesRequired = errors.New("case queries are required")
+
+type reconciliationRunner interface {
+	RunRevenueLeakageCheck(
+		ctx context.Context,
+		cmd appreconciliation.RunRevenueLeakageCheckCommand,
+	) (appreconciliation.RunRevenueLeakageCheckResult, error)
+}
+
+type caseQueries interface {
+	ListCases(
+		ctx context.Context,
+		cmd caseapp.ListCasesCommand,
+	) (caseapp.ListCasesResult, error)
+	GetCase(
+		ctx context.Context,
+		cmd caseapp.GetCaseCommand,
+	) (caseapp.GetCaseResult, error)
+}
+
+// Handler registers HTTP routes backed by application use cases.
+type Handler struct {
+	reconciliation reconciliationRunner
+	cases          caseQueries
+}
+
+// NewHandler constructs the gateway HTTP handler set.
+func NewHandler(
+	reconciliation reconciliationRunner,
+	cases caseQueries,
+) (*Handler, error) {
+	if reconciliation == nil {
+		return nil, ErrReconciliationRunnerRequired
+	}
+
+	if cases == nil {
+		return nil, ErrCaseQueriesRequired
+	}
+
+	return &Handler{
+		reconciliation: reconciliation,
+		cases:          cases,
+	}, nil
+}
+
+// RegisterRoutes attaches API routes to the provided router.
+func (h *Handler) RegisterRoutes(router chi.Router) {
+	router.Route("/api/v1", func(router chi.Router) {
+		router.Post("/reconciliation/run", h.handleRunReconciliation)
+		router.Get("/cases", h.handleListCases)
+		router.Get("/cases/{case_id}", h.handleGetCase)
+	})
+}
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+func decodeJSON(r *stdhttp.Request, destination any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(destination); err != nil {
+		return fmt.Errorf("decode json body: %w", err)
+	}
+
+	return nil
+}
+
+func writeJSON(w stdhttp.ResponseWriter, statusCode int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		stdhttp.Error(w, `{"error":"failed to encode response"}`, stdhttp.StatusInternalServerError)
+	}
+}
+
+func writeError(w stdhttp.ResponseWriter, statusCode int, message string) {
+	writeJSON(w, statusCode, errorResponse{
+		Error: message,
+	})
+}

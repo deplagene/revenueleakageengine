@@ -12,9 +12,15 @@ import (
 	"syscall"
 	"time"
 
+	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
+	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
+	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
 	"github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
+	casework "github.com/deplagene/revenueleakageengine/internal/service/case"
+	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
+	revenueservice "github.com/deplagene/revenueleakageengine/internal/service/revenue"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
@@ -75,7 +81,22 @@ func run() error {
 		return err
 	}
 
-	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP))
+	reconciliationWorkflow, err := buildReconciliationWorkflow(db)
+	if err != nil {
+		return err
+	}
+
+	caseQueries, err := buildCaseQueries(db)
+	if err != nil {
+		return err
+	}
+
+	httpHandler, err := gatewayhttp.NewHandler(reconciliationWorkflow, caseQueries)
+	if err != nil {
+		return fmt.Errorf("build http handler: %w", err)
+	}
+
+	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
 	errCh := startHTTPServer(server, logger)
 
 	return waitForShutdown(ctx, server, cfg.HTTP.ShutdownTimeout, errCh, logger)
@@ -112,7 +133,49 @@ func newLogger(cfg loggingConfig) *logging.Logger {
 	)
 }
 
-func newRouter(logger *logging.Logger, cfg httpConfig) http.Handler {
+func buildReconciliationWorkflow(db *sql.DB) (*appreconciliation.RevenueLeakageWorkflow, error) {
+	revenueStore := revenueservice.NewSQLiteStore(db)
+	revenueService := revenueservice.NewService(
+		revenueservice.WithStore(revenueStore),
+	)
+
+	reconciliationStore := reconciliationservice.NewSQLiteStore(db)
+	reconciliationService, err := reconciliationservice.NewService(reconciliationStore)
+	if err != nil {
+		return nil, fmt.Errorf("build reconciliation service: %w", err)
+	}
+
+	workflow, err := appreconciliation.NewRevenueLeakageWorkflow(
+		revenueService,
+		reconciliationService,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build reconciliation workflow: %w", err)
+	}
+
+	return workflow, nil
+}
+
+func buildCaseQueries(db *sql.DB) (*caseapp.Queries, error) {
+	caseStore := casework.NewSQLiteStore(db)
+	caseService, err := casework.NewService(caseStore)
+	if err != nil {
+		return nil, fmt.Errorf("build case service: %w", err)
+	}
+
+	queries, err := caseapp.NewQueries(caseService)
+	if err != nil {
+		return nil, fmt.Errorf("build case queries: %w", err)
+	}
+
+	return queries, nil
+}
+
+func newRouter(
+	logger *logging.Logger,
+	cfg httpConfig,
+	handler *gatewayhttp.Handler,
+) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(httpmiddleware.LoggerContext(logger))
@@ -126,6 +189,8 @@ func newRouter(logger *logging.Logger, cfg httpConfig) http.Handler {
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
+
+	handler.RegisterRoutes(router)
 
 	return router
 }
