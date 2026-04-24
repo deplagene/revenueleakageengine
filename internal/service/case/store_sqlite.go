@@ -169,6 +169,8 @@ func (s *SQLiteStore) UpdateCaseStatus(
 		ToStatus:   string(history.ToStatus),
 		ChangedAt:  history.ChangedAt.UTC().Format(time.RFC3339Nano),
 		ChangedBy:  history.ChangedBy,
+		ReasonCode: history.ReasonCode,
+		Comment:    history.Comment,
 	}); err != nil {
 		return fmt.Errorf("create case status history: %w", err)
 	}
@@ -374,6 +376,8 @@ func statusHistoryFromRow(row sqlitedb.CaseStatusHistory) (leakage.StatusHistory
 		ToStatus:   leakage.Status(row.ToStatus),
 		ChangedAt:  changedAt.UTC(),
 		ChangedBy:  row.ChangedBy,
+		ReasonCode: row.ReasonCode,
+		Comment:    row.Comment,
 	}, nil
 }
 

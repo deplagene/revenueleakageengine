@@ -16,14 +16,18 @@ INSERT INTO case_status_history (
     from_status,
     to_status,
     changed_at,
-    changed_by
+    changed_by,
+    reason_code,
+    comment
 ) VALUES (
     ?1,
     ?2,
     ?3,
     ?4,
     ?5,
-    ?6
+    ?6,
+    ?7,
+    ?8
 )
 `
 
@@ -34,6 +38,8 @@ type CreateCaseStatusHistoryParams struct {
 	ToStatus   string `json:"to_status"`
 	ChangedAt  string `json:"changed_at"`
 	ChangedBy  string `json:"changed_by"`
+	ReasonCode string `json:"reason_code"`
+	Comment    string `json:"comment"`
 }
 
 func (q *Queries) CreateCaseStatusHistory(ctx context.Context, arg CreateCaseStatusHistoryParams) error {
@@ -44,6 +50,8 @@ func (q *Queries) CreateCaseStatusHistory(ctx context.Context, arg CreateCaseSta
 		arg.ToStatus,
 		arg.ChangedAt,
 		arg.ChangedBy,
+		arg.ReasonCode,
+		arg.Comment,
 	)
 	return err
 }
@@ -111,7 +119,9 @@ SELECT
     from_status,
     to_status,
     changed_at,
-    changed_by
+    changed_by,
+    reason_code,
+    comment
 FROM case_status_history
 WHERE case_id = ?1
 ORDER BY changed_at ASC, id ASC
@@ -133,6 +143,8 @@ func (q *Queries) ListCaseStatusHistoryByCase(ctx context.Context, caseID string
 			&i.ToStatus,
 			&i.ChangedAt,
 			&i.ChangedBy,
+			&i.ReasonCode,
+			&i.Comment,
 		); err != nil {
 			return nil, err
 		}

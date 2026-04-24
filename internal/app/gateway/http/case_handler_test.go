@@ -249,6 +249,8 @@ func TestHandlerGetCase(t *testing.T) {
 					ToStatus:   leakage.StatusInvestigating,
 					ChangedAt:  time.Date(2026, time.May, 1, 10, 3, 0, 0, time.UTC),
 					ChangedBy:  "billing-ops",
+					ReasonCode: "triage_started",
+					Comment:    "Started manual investigation.",
 				},
 			},
 		},
@@ -302,6 +304,10 @@ func TestHandlerGetCase(t *testing.T) {
 
 	if got := len(payload.History); got != 1 {
 		t.Fatalf("history count = %d, want 1", got)
+	}
+
+	if payload.History[0].ReasonCode != "triage_started" {
+		t.Fatalf("history reason code = %q, want %q", payload.History[0].ReasonCode, "triage_started")
 	}
 }
 
@@ -390,6 +396,150 @@ func TestHandlerPatchCaseStatus(t *testing.T) {
 
 	if caseCommands.receivedStatus.Status != leakage.StatusInvestigating {
 		t.Fatalf("status = %s, want %s", caseCommands.receivedStatus.Status, leakage.StatusInvestigating)
+	}
+}
+
+func TestHandlerPatchCaseStatusRejectsResolved(t *testing.T) {
+	t.Parallel()
+
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, &recordingCaseCommands{})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	request := httptest.NewRequest(
+		stdhttp.MethodPatch,
+		"/api/v1/cases/22222222-2222-2222-2222-222222222222/status",
+		strings.NewReader(`{"tenant_id":"11111111-1111-1111-1111-111111111111","status":"resolved","changed_by":"billing-ops"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d, body=%s", response.Code, stdhttp.StatusBadRequest, response.Body.String())
+	}
+}
+
+func TestHandlerPatchCaseResolve(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	caseID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	caseCommands := &recordingCaseCommands{
+		statusResult: caseapp.UpdateCaseStatusResult{
+			Case: leakage.Case{
+				ID:              caseID,
+				TenantID:        tenantID,
+				CustomerID:      uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+				ContractID:      uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+				Type:            leakage.CaseTypeUnderbilling,
+				Severity:        leakage.SeverityHigh,
+				Status:          leakage.StatusResolved,
+				DetectedAt:      time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
+				Period:          mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				ExpectedAmount:  valueobject.MustMoney("USD", 5800),
+				ActualAmount:    valueobject.MustMoney("USD", 4640),
+				LeakageAmount:   valueobject.MustMoney("USD", 1160),
+				ConfidenceScore: valueobject.MustConfidenceScore(9500),
+				TraceID:         "trace-1",
+			},
+		},
+	}
+
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	request := httptest.NewRequest(
+		stdhttp.MethodPatch,
+		"/api/v1/cases/"+caseID.String()+"/resolve",
+		strings.NewReader(`{"tenant_id":"`+tenantID.String()+`","reason_code":"invoice_corrected","comment":"Reissued invoice.","changed_by":"billing-ops"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("status code = %d, want %d, body=%s", response.Code, stdhttp.StatusOK, response.Body.String())
+	}
+
+	if caseCommands.receivedStatus.Status != leakage.StatusResolved {
+		t.Fatalf("status = %s, want %s", caseCommands.receivedStatus.Status, leakage.StatusResolved)
+	}
+
+	if caseCommands.receivedStatus.ReasonCode != "invoice_corrected" {
+		t.Fatalf("reason code = %q, want %q", caseCommands.receivedStatus.ReasonCode, "invoice_corrected")
+	}
+
+	if caseCommands.receivedStatus.Comment != "Reissued invoice." {
+		t.Fatalf("comment = %q, want %q", caseCommands.receivedStatus.Comment, "Reissued invoice.")
+	}
+}
+
+func TestHandlerPatchCaseDismiss(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	caseID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	caseCommands := &recordingCaseCommands{
+		statusResult: caseapp.UpdateCaseStatusResult{
+			Case: leakage.Case{
+				ID:              caseID,
+				TenantID:        tenantID,
+				CustomerID:      uuid.MustParse("33333333-3333-3333-3333-333333333333"),
+				ContractID:      uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+				Type:            leakage.CaseTypeUnderbilling,
+				Severity:        leakage.SeverityHigh,
+				Status:          leakage.StatusDismissed,
+				DetectedAt:      time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
+				Period:          mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				ExpectedAmount:  valueobject.MustMoney("USD", 5800),
+				ActualAmount:    valueobject.MustMoney("USD", 4640),
+				LeakageAmount:   valueobject.MustMoney("USD", 1160),
+				ConfidenceScore: valueobject.MustConfidenceScore(9500),
+				TraceID:         "trace-1",
+			},
+		},
+	}
+
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	request := httptest.NewRequest(
+		stdhttp.MethodPatch,
+		"/api/v1/cases/"+caseID.String()+"/dismiss",
+		strings.NewReader(`{"tenant_id":"`+tenantID.String()+`","reason_code":"false_positive","comment":"Usage was duplicated by source retry.","changed_by":"billing-ops"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("status code = %d, want %d, body=%s", response.Code, stdhttp.StatusOK, response.Body.String())
+	}
+
+	if caseCommands.receivedStatus.Status != leakage.StatusDismissed {
+		t.Fatalf("status = %s, want %s", caseCommands.receivedStatus.Status, leakage.StatusDismissed)
+	}
+
+	if caseCommands.receivedStatus.ReasonCode != "false_positive" {
+		t.Fatalf("reason code = %q, want %q", caseCommands.receivedStatus.ReasonCode, "false_positive")
 	}
 }
 

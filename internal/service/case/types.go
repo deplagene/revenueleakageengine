@@ -4,6 +4,7 @@ package casework
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/deplagene/revenueleakageengine/internal/domain/leakage"
 	"github.com/google/uuid"
@@ -30,6 +31,9 @@ var (
 	// ErrAssigneeRequired reports that a case assignee update was requested
 	// without a target assignee.
 	ErrAssigneeRequired = errors.New("assignee is required")
+	// ErrReasonCodeRequired reports that a terminal case decision was requested
+	// without a reason code.
+	ErrReasonCodeRequired = errors.New("reason code is required")
 	// ErrLimitInvalid reports that the requested page size is not positive.
 	ErrLimitInvalid = errors.New("limit must be greater than zero")
 	// ErrOffsetInvalid reports that the requested page offset is negative.
@@ -111,10 +115,12 @@ type GetCaseResult struct {
 // UpdateCaseStatusCommand describes one lifecycle transition request for a
 // leakage case.
 type UpdateCaseStatusCommand struct {
-	TenantID  uuid.UUID
-	CaseID    uuid.UUID
-	Status    leakage.Status
-	ChangedBy string
+	TenantID   uuid.UUID
+	CaseID     uuid.UUID
+	Status     leakage.Status
+	ChangedBy  string
+	ReasonCode string
+	Comment    string
 }
 
 // Validate checks that the status update request is structurally valid.
@@ -133,6 +139,11 @@ func (c UpdateCaseStatusCommand) Validate() error {
 
 	if err := c.Status.Validate(); err != nil {
 		return err
+	}
+
+	if (c.Status == leakage.StatusResolved || c.Status == leakage.StatusDismissed) &&
+		strings.TrimSpace(c.ReasonCode) == "" {
+		return ErrReasonCodeRequired
 	}
 
 	return nil

@@ -96,14 +96,18 @@ INSERT INTO case_status_history (
     from_status,
     to_status,
     changed_at,
-    changed_by
+    changed_by,
+    reason_code,
+    comment
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(case_id),
     sqlc.arg(from_status),
     sqlc.arg(to_status),
     sqlc.arg(changed_at),
-    sqlc.arg(changed_by)
+    sqlc.arg(changed_by),
+    sqlc.arg(reason_code),
+    sqlc.arg(comment)
 );
 
 -- name: ListCaseStatusHistoryByCase :many
@@ -113,7 +117,9 @@ SELECT
     from_status,
     to_status,
     changed_at,
-    changed_by
+    changed_by,
+    reason_code,
+    comment
 FROM case_status_history
 WHERE case_id = sqlc.arg(case_id)
 ORDER BY changed_at ASC, id ASC;

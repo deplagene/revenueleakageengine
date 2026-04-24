@@ -56,6 +56,8 @@ type CaseStatusHistory struct {
 	ToStatus   string `json:"to_status"`
 	ChangedAt  string `json:"changed_at"`
 	ChangedBy  string `json:"changed_by"`
+	ReasonCode string `json:"reason_code"`
+	Comment    string `json:"comment"`
 }
 
 type Contract struct {

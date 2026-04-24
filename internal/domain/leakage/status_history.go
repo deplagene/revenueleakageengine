@@ -14,4 +14,6 @@ type StatusHistory struct {
 	ToStatus   Status
 	ChangedAt  time.Time
 	ChangedBy  string
+	ReasonCode string
+	Comment    string
 }

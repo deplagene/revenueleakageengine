@@ -91,6 +91,10 @@ func TestSQLiteStoreGetCase(t *testing.T) {
 	if got := len(result.History); got != 1 {
 		t.Fatalf("history count = %d, want 1", got)
 	}
+
+	if result.History[0].ReasonCode != "triage_started" {
+		t.Fatalf("history reason code = %q, want %q", result.History[0].ReasonCode, "triage_started")
+	}
 }
 
 func TestSQLiteStoreUpdateCaseStatus(t *testing.T) {
@@ -111,14 +115,16 @@ func TestSQLiteStoreUpdateCaseStatus(t *testing.T) {
 	err := store.UpdateCaseStatus(ctx, leakage.Case{
 		ID:       caseID,
 		TenantID: tenantID,
-		Status:   leakage.StatusInvestigating,
+		Status:   leakage.StatusResolved,
 	}, leakage.StatusHistory{
 		ID:         uuid.New(),
 		CaseID:     caseID,
-		FromStatus: leakage.StatusOpen,
-		ToStatus:   leakage.StatusInvestigating,
+		FromStatus: leakage.StatusInvestigating,
+		ToStatus:   leakage.StatusResolved,
 		ChangedAt:  time.Date(2026, time.May, 1, 11, 0, 0, 0, time.UTC),
 		ChangedBy:  "billing-ops",
+		ReasonCode: "invoice_corrected",
+		Comment:    "Reissued corrected invoice.",
 	})
 	if err != nil {
 		t.Fatalf("UpdateCaseStatus() error = %v", err)
@@ -133,8 +139,8 @@ func TestSQLiteStoreUpdateCaseStatus(t *testing.T) {
 		t.Fatalf("query updated case status: %v", err)
 	}
 
-	if status != "investigating" {
-		t.Fatalf("status = %s, want investigating", status)
+	if status != "resolved" {
+		t.Fatalf("status = %s, want resolved", status)
 	}
 
 	var historyCount int
@@ -148,6 +154,23 @@ func TestSQLiteStoreUpdateCaseStatus(t *testing.T) {
 
 	if historyCount != 1 {
 		t.Fatalf("history count = %d, want 1", historyCount)
+	}
+
+	var reasonCode, comment string
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT reason_code, comment FROM case_status_history WHERE case_id = ?`,
+		caseID.String(),
+	).Scan(&reasonCode, &comment); err != nil {
+		t.Fatalf("query case status history decision context: %v", err)
+	}
+
+	if reasonCode != "invoice_corrected" {
+		t.Fatalf("reason code = %q, want %q", reasonCode, "invoice_corrected")
+	}
+
+	if comment != "Reissued corrected invoice." {
+		t.Fatalf("comment = %q, want %q", comment, "Reissued corrected invoice.")
 	}
 }
 
@@ -428,14 +451,18 @@ func seedCaseStatusHistory(t *testing.T, ctx context.Context, db *sql.DB, caseID
 			from_status,
 			to_status,
 			changed_at,
-			changed_by
-		) VALUES (?, ?, ?, ?, ?, ?)`,
+			changed_by,
+			reason_code,
+			comment
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		uuid.New().String(),
 		caseID.String(),
 		"open",
 		"investigating",
 		"2026-05-01T10:03:00Z",
 		"billing-ops",
+		"triage_started",
+		"Started manual investigation.",
 	)
 	if err != nil {
 		t.Fatalf("seed case status history: %v", err)

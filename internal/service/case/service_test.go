@@ -191,6 +191,65 @@ func TestServiceUpdateCaseStatus(t *testing.T) {
 	}
 }
 
+func TestServiceUpdateCaseStatusRequiresReasonForResolved(t *testing.T) {
+	t.Parallel()
+
+	service, err := NewService(&fakeStore{})
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	_, err = service.UpdateCaseStatus(context.Background(), UpdateCaseStatusCommand{
+		TenantID: uuid.New(),
+		CaseID:   uuid.New(),
+		Status:   leakage.StatusResolved,
+	})
+	if !errors.Is(err, ErrReasonCodeRequired) {
+		t.Fatalf("UpdateCaseStatus() error = %v, want ErrReasonCodeRequired", err)
+	}
+}
+
+func TestServiceUpdateCaseStatusPersistsReasonAndComment(t *testing.T) {
+	t.Parallel()
+
+	tenantID := uuid.New()
+	caseID := uuid.New()
+	store := &fakeStore{
+		caseResult: GetCaseResult{
+			Case: leakage.Case{
+				ID:       caseID,
+				TenantID: tenantID,
+				Status:   leakage.StatusInvestigating,
+			},
+		},
+	}
+
+	service, err := NewService(store)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	_, err = service.UpdateCaseStatus(context.Background(), UpdateCaseStatusCommand{
+		TenantID:   tenantID,
+		CaseID:     caseID,
+		Status:     leakage.StatusResolved,
+		ChangedBy:  "billing-ops",
+		ReasonCode: "invoice_corrected",
+		Comment:    "Reissued corrected invoice.",
+	})
+	if err != nil {
+		t.Fatalf("UpdateCaseStatus() error = %v", err)
+	}
+
+	if store.history.ReasonCode != "invoice_corrected" {
+		t.Fatalf("reason code = %q, want %q", store.history.ReasonCode, "invoice_corrected")
+	}
+
+	if store.history.Comment != "Reissued corrected invoice." {
+		t.Fatalf("comment = %q, want %q", store.history.Comment, "Reissued corrected invoice.")
+	}
+}
+
 func TestServiceUpdateCaseStatusInvalidTransition(t *testing.T) {
 	t.Parallel()
 
@@ -210,9 +269,10 @@ func TestServiceUpdateCaseStatusInvalidTransition(t *testing.T) {
 	}
 
 	_, err = service.UpdateCaseStatus(context.Background(), UpdateCaseStatusCommand{
-		TenantID: store.caseResult.Case.TenantID,
-		CaseID:   store.caseResult.Case.ID,
-		Status:   leakage.StatusDismissed,
+		TenantID:   store.caseResult.Case.TenantID,
+		CaseID:     store.caseResult.Case.ID,
+		Status:     leakage.StatusDismissed,
+		ReasonCode: "false_positive",
 	})
 	if !errors.Is(err, leakage.ErrInvalidStatusTransition) {
 		t.Fatalf("UpdateCaseStatus() error = %v, want ErrInvalidStatusTransition", err)

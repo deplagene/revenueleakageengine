@@ -324,7 +324,9 @@ CREATE TABLE case_status_history (
     from_status TEXT NOT NULL,
     to_status TEXT NOT NULL,
     changed_at TEXT NOT NULL,
-    changed_by TEXT NOT NULL DEFAULT ''
+    changed_by TEXT NOT NULL DEFAULT '',
+    reason_code TEXT NOT NULL DEFAULT '',
+    comment TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX case_status_history_case_changed_idx

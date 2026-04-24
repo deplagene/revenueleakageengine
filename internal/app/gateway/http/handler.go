@@ -93,6 +93,8 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 		router.Get("/cases", h.handleListCases)
 		router.Get("/cases/{case_id}", h.handleGetCase)
 		router.Patch("/cases/{case_id}/status", h.handlePatchCaseStatus)
+		router.Patch("/cases/{case_id}/resolve", h.handlePatchCaseResolve)
+		router.Patch("/cases/{case_id}/dismiss", h.handlePatchCaseDismiss)
 		router.Patch("/cases/{case_id}/assignee", h.handlePatchCaseAssignee)
 	})
 }

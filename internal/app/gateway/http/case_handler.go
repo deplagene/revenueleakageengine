@@ -72,6 +72,8 @@ type caseStatusHistoryResponse struct {
 	ToStatus   string `json:"to_status"`
 	ChangedAt  string `json:"changed_at"`
 	ChangedBy  string `json:"changed_by"`
+	ReasonCode string `json:"reason_code"`
+	Comment    string `json:"comment"`
 }
 
 type patchCaseStatusRequest struct {
@@ -81,6 +83,17 @@ type patchCaseStatusRequest struct {
 }
 
 type patchCaseStatusResponse struct {
+	Case caseResponse `json:"case"`
+}
+
+type patchCaseDecisionRequest struct {
+	TenantID   string `json:"tenant_id"`
+	ReasonCode string `json:"reason_code"`
+	Comment    string `json:"comment"`
+	ChangedBy  string `json:"changed_by"`
+}
+
+type patchCaseDecisionResponse struct {
 	Case caseResponse `json:"case"`
 }
 
@@ -159,6 +172,14 @@ func (h *Handler) handlePatchCaseStatus(w stdhttp.ResponseWriter, r *stdhttp.Req
 	})
 }
 
+func (h *Handler) handlePatchCaseResolve(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	h.handlePatchCaseDecision(w, r, leakage.StatusResolved)
+}
+
+func (h *Handler) handlePatchCaseDismiss(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	h.handlePatchCaseDecision(w, r, leakage.StatusDismissed)
+}
+
 func (h *Handler) handlePatchCaseAssignee(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	var request patchCaseAssigneeRequest
 	if err := decodeJSON(r, &request); err != nil {
@@ -184,6 +205,39 @@ func (h *Handler) handlePatchCaseAssignee(w stdhttp.ResponseWriter, r *stdhttp.R
 	}
 
 	writeJSON(w, stdhttp.StatusOK, patchCaseAssigneeResponse{
+		Case: newCaseResponse(result.Case),
+	})
+}
+
+func (h *Handler) handlePatchCaseDecision(
+	w stdhttp.ResponseWriter,
+	r *stdhttp.Request,
+	targetStatus leakage.Status,
+) {
+	var request patchCaseDecisionRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	command, err := patchCaseDecisionCommandFromRequest(r, request, targetStatus)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	result, err := h.caseCommands.UpdateCaseStatus(r.Context(), command)
+	if err != nil {
+		statusCode := stdhttp.StatusUnprocessableEntity
+		if errors.Is(err, caseapp.ErrCaseNotFound) {
+			statusCode = stdhttp.StatusNotFound
+		}
+
+		writeError(w, statusCode, err.Error())
+		return
+	}
+
+	writeJSON(w, stdhttp.StatusOK, patchCaseDecisionResponse{
 		Case: newCaseResponse(result.Case),
 	})
 }
@@ -265,16 +319,43 @@ func patchCaseStatusCommandFromRequest(
 		return caseapp.UpdateCaseStatusCommand{}, err
 	}
 
-	status, err := parseCaseStatus(request.Status)
+	status, err := parseOperationalCaseStatus(request.Status)
 	if err != nil {
 		return caseapp.UpdateCaseStatusCommand{}, err
 	}
 
 	return caseapp.UpdateCaseStatusCommand{
-		TenantID:  tenantID,
-		CaseID:    caseID,
-		Status:    status,
-		ChangedBy: request.ChangedBy,
+		TenantID:   tenantID,
+		CaseID:     caseID,
+		Status:     status,
+		ChangedBy:  request.ChangedBy,
+		ReasonCode: "",
+		Comment:    "",
+	}, nil
+}
+
+func patchCaseDecisionCommandFromRequest(
+	r *stdhttp.Request,
+	request patchCaseDecisionRequest,
+	targetStatus leakage.Status,
+) (caseapp.UpdateCaseStatusCommand, error) {
+	tenantID, err := parseUUID("tenant id", request.TenantID)
+	if err != nil {
+		return caseapp.UpdateCaseStatusCommand{}, err
+	}
+
+	caseID, err := parseUUID("case id", chi.URLParam(r, "case_id"))
+	if err != nil {
+		return caseapp.UpdateCaseStatusCommand{}, err
+	}
+
+	return caseapp.UpdateCaseStatusCommand{
+		TenantID:   tenantID,
+		CaseID:     caseID,
+		Status:     targetStatus,
+		ChangedBy:  request.ChangedBy,
+		ReasonCode: request.ReasonCode,
+		Comment:    request.Comment,
 	}, nil
 }
 
@@ -333,6 +414,8 @@ func newGetCaseResponse(result caseapp.GetCaseResult) getCaseResponse {
 			ToStatus:   string(item.ToStatus),
 			ChangedAt:  item.ChangedAt.UTC().Format(time.RFC3339Nano),
 			ChangedBy:  item.ChangedBy,
+			ReasonCode: item.ReasonCode,
+			Comment:    item.Comment,
 		})
 	}
 
@@ -400,6 +483,17 @@ func parseCaseStatus(raw string) (leakage.Status, error) {
 		return leakage.StatusDismissed, nil
 	default:
 		return "", fmt.Errorf("parse status: invalid status %q", raw)
+	}
+}
+
+func parseOperationalCaseStatus(raw string) (leakage.Status, error) {
+	switch leakage.Status(raw) {
+	case leakage.StatusOpen:
+		return leakage.StatusOpen, nil
+	case leakage.StatusInvestigating:
+		return leakage.StatusInvestigating, nil
+	default:
+		return "", fmt.Errorf("parse status: only open or investigating are supported on this endpoint")
 	}
 }
 

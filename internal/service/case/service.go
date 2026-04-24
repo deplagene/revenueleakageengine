@@ -106,6 +106,8 @@ func (s *Service) UpdateCaseStatus(
 		ToStatus:   cmd.Status,
 		ChangedAt:  time.Now().UTC(),
 		ChangedBy:  cmd.ChangedBy,
+		ReasonCode: strings.TrimSpace(cmd.ReasonCode),
+		Comment:    strings.TrimSpace(cmd.Comment),
 	}
 
 	if err := s.store.UpdateCaseStatus(ctx, updatedCase, history); err != nil {
