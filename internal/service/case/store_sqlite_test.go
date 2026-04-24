@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deplagene/revenueleakageengine/internal/domain/leakage"
 	platformsqlite "github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
 	"github.com/google/uuid"
 )
@@ -64,6 +65,7 @@ func TestSQLiteStoreGetCase(t *testing.T) {
 	seedLeakageCaseWithID(t, ctx, db, caseID, tenantID, customerID, contractID)
 	seedLeakageEvidence(t, ctx, db, caseID)
 	seedRootCause(t, ctx, db, caseID)
+	seedCaseStatusHistory(t, ctx, db, caseID)
 
 	store := NewSQLiteStore(db)
 	result, err := store.GetCase(ctx, GetCaseCommand{
@@ -84,6 +86,106 @@ func TestSQLiteStoreGetCase(t *testing.T) {
 
 	if got := len(result.RootCauses); got != 1 {
 		t.Fatalf("root cause count = %d, want 1", got)
+	}
+
+	if got := len(result.History); got != 1 {
+		t.Fatalf("history count = %d, want 1", got)
+	}
+}
+
+func TestSQLiteStoreUpdateCaseStatus(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := openTestSQLite(t, ctx)
+	defer db.Close()
+
+	tenantID := uuid.New()
+	customerID := uuid.New()
+	contractID := uuid.New()
+	caseID := uuid.New()
+	seedCaseReferences(t, ctx, db, tenantID, customerID, contractID)
+	seedLeakageCaseWithID(t, ctx, db, caseID, tenantID, customerID, contractID)
+
+	store := NewSQLiteStore(db)
+	err := store.UpdateCaseStatus(ctx, leakage.Case{
+		ID:       caseID,
+		TenantID: tenantID,
+		Status:   leakage.StatusInvestigating,
+	}, leakage.StatusHistory{
+		ID:         uuid.New(),
+		CaseID:     caseID,
+		FromStatus: leakage.StatusOpen,
+		ToStatus:   leakage.StatusInvestigating,
+		ChangedAt:  time.Date(2026, time.May, 1, 11, 0, 0, 0, time.UTC),
+		ChangedBy:  "billing-ops",
+	})
+	if err != nil {
+		t.Fatalf("UpdateCaseStatus() error = %v", err)
+	}
+
+	var status string
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT status FROM leakage_cases WHERE id = ?`,
+		caseID.String(),
+	).Scan(&status); err != nil {
+		t.Fatalf("query updated case status: %v", err)
+	}
+
+	if status != "investigating" {
+		t.Fatalf("status = %s, want investigating", status)
+	}
+
+	var historyCount int
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM case_status_history WHERE case_id = ?`,
+		caseID.String(),
+	).Scan(&historyCount); err != nil {
+		t.Fatalf("query case status history count: %v", err)
+	}
+
+	if historyCount != 1 {
+		t.Fatalf("history count = %d, want 1", historyCount)
+	}
+}
+
+func TestSQLiteStoreUpdateCaseAssignee(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := openTestSQLite(t, ctx)
+	defer db.Close()
+
+	tenantID := uuid.New()
+	customerID := uuid.New()
+	contractID := uuid.New()
+	caseID := uuid.New()
+	seedCaseReferences(t, ctx, db, tenantID, customerID, contractID)
+	seedLeakageCaseWithID(t, ctx, db, caseID, tenantID, customerID, contractID)
+
+	store := NewSQLiteStore(db)
+	err := store.UpdateCaseAssignee(ctx, leakage.Case{
+		ID:       caseID,
+		TenantID: tenantID,
+		Assignee: "billing-ops",
+	})
+	if err != nil {
+		t.Fatalf("UpdateCaseAssignee() error = %v", err)
+	}
+
+	var assignee string
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT assignee FROM leakage_cases WHERE id = ?`,
+		caseID.String(),
+	).Scan(&assignee); err != nil {
+		t.Fatalf("query updated case assignee: %v", err)
+	}
+
+	if assignee != "billing-ops" {
+		t.Fatalf("assignee = %q, want %q", assignee, "billing-ops")
 	}
 }
 
@@ -312,5 +414,30 @@ func seedRootCause(t *testing.T, ctx context.Context, db *sql.DB, caseID uuid.UU
 	)
 	if err != nil {
 		t.Fatalf("seed root cause: %v", err)
+	}
+}
+
+func seedCaseStatusHistory(t *testing.T, ctx context.Context, db *sql.DB, caseID uuid.UUID) {
+	t.Helper()
+
+	_, err := db.ExecContext(
+		ctx,
+		`INSERT INTO case_status_history (
+			id,
+			case_id,
+			from_status,
+			to_status,
+			changed_at,
+			changed_by
+		) VALUES (?, ?, ?, ?, ?, ?)`,
+		uuid.New().String(),
+		caseID.String(),
+		"open",
+		"investigating",
+		"2026-05-01T10:03:00Z",
+		"billing-ops",
+	)
+	if err != nil {
+		t.Fatalf("seed case status history: %v", err)
 	}
 }

@@ -50,6 +50,25 @@ func (s *stubCaseQueries) GetCase(
 	return caseapp.GetCaseResult{}, s.err
 }
 
+type stubCaseCommands struct {
+	result caseapp.UpdateCaseStatusResult
+	err    error
+}
+
+func (s *stubCaseCommands) UpdateCaseStatus(
+	_ context.Context,
+	cmd caseapp.UpdateCaseStatusCommand,
+) (caseapp.UpdateCaseStatusResult, error) {
+	return s.result, s.err
+}
+
+func (s *stubCaseCommands) UpdateCaseAssignee(
+	_ context.Context,
+	cmd caseapp.UpdateCaseAssigneeCommand,
+) (caseapp.UpdateCaseAssigneeResult, error) {
+	return caseapp.UpdateCaseAssigneeResult{}, s.err
+}
+
 func TestHandlerRunReconciliation(t *testing.T) {
 	t.Parallel()
 
@@ -89,7 +108,7 @@ func TestHandlerRunReconciliation(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(runner, &stubCaseQueries{})
+	handler, err := NewHandler(runner, &stubCaseQueries{}, &stubCaseCommands{})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}
@@ -200,7 +219,7 @@ func TestHandlerRunReconciliationBadRequest(t *testing.T) {
 
 	runner := &stubReconciliationRunner{}
 
-	handler, err := NewHandler(runner, &stubCaseQueries{})
+	handler, err := NewHandler(runner, &stubCaseQueries{}, &stubCaseCommands{})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}

@@ -86,12 +86,12 @@ func run() error {
 		return err
 	}
 
-	caseQueries, err := buildCaseQueries(db)
+	caseQueries, caseCommands, err := buildCaseUseCases(db)
 	if err != nil {
 		return err
 	}
 
-	httpHandler, err := gatewayhttp.NewHandler(reconciliationWorkflow, caseQueries)
+	httpHandler, err := gatewayhttp.NewHandler(reconciliationWorkflow, caseQueries, caseCommands)
 	if err != nil {
 		return fmt.Errorf("build http handler: %w", err)
 	}
@@ -156,19 +156,24 @@ func buildReconciliationWorkflow(db *sql.DB) (*appreconciliation.RevenueLeakageW
 	return workflow, nil
 }
 
-func buildCaseQueries(db *sql.DB) (*caseapp.Queries, error) {
+func buildCaseUseCases(db *sql.DB) (*caseapp.Queries, *caseapp.Commands, error) {
 	caseStore := casework.NewSQLiteStore(db)
 	caseService, err := casework.NewService(caseStore)
 	if err != nil {
-		return nil, fmt.Errorf("build case service: %w", err)
+		return nil, nil, fmt.Errorf("build case service: %w", err)
 	}
 
 	queries, err := caseapp.NewQueries(caseService)
 	if err != nil {
-		return nil, fmt.Errorf("build case queries: %w", err)
+		return nil, nil, fmt.Errorf("build case queries: %w", err)
 	}
 
-	return queries, nil
+	commands, err := caseapp.NewCommands(caseService)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build case commands: %w", err)
+	}
+
+	return queries, commands, nil
 }
 
 func newRouter(

@@ -76,3 +76,44 @@ SELECT
 FROM root_causes
 WHERE case_id = sqlc.arg(case_id)
 ORDER BY created_at ASC, id ASC;
+
+-- name: UpdateLeakageCaseStatus :execrows
+UPDATE leakage_cases
+SET status = sqlc.arg(status)
+WHERE tenant_id = sqlc.arg(tenant_id)
+  AND id = sqlc.arg(case_id);
+
+-- name: UpdateLeakageCaseAssignee :execrows
+UPDATE leakage_cases
+SET assignee = sqlc.arg(assignee)
+WHERE tenant_id = sqlc.arg(tenant_id)
+  AND id = sqlc.arg(case_id);
+
+-- name: CreateCaseStatusHistory :exec
+INSERT INTO case_status_history (
+    id,
+    case_id,
+    from_status,
+    to_status,
+    changed_at,
+    changed_by
+) VALUES (
+    sqlc.arg(id),
+    sqlc.arg(case_id),
+    sqlc.arg(from_status),
+    sqlc.arg(to_status),
+    sqlc.arg(changed_at),
+    sqlc.arg(changed_by)
+);
+
+-- name: ListCaseStatusHistoryByCase :many
+SELECT
+    id,
+    case_id,
+    from_status,
+    to_status,
+    changed_at,
+    changed_by
+FROM case_status_history
+WHERE case_id = sqlc.arg(case_id)
+ORDER BY changed_at ASC, id ASC;

@@ -9,6 +9,45 @@ import (
 	"context"
 )
 
+const createCaseStatusHistory = `-- name: CreateCaseStatusHistory :exec
+INSERT INTO case_status_history (
+    id,
+    case_id,
+    from_status,
+    to_status,
+    changed_at,
+    changed_by
+) VALUES (
+    ?1,
+    ?2,
+    ?3,
+    ?4,
+    ?5,
+    ?6
+)
+`
+
+type CreateCaseStatusHistoryParams struct {
+	ID         string `json:"id"`
+	CaseID     string `json:"case_id"`
+	FromStatus string `json:"from_status"`
+	ToStatus   string `json:"to_status"`
+	ChangedAt  string `json:"changed_at"`
+	ChangedBy  string `json:"changed_by"`
+}
+
+func (q *Queries) CreateCaseStatusHistory(ctx context.Context, arg CreateCaseStatusHistoryParams) error {
+	_, err := q.db.ExecContext(ctx, createCaseStatusHistory,
+		arg.ID,
+		arg.CaseID,
+		arg.FromStatus,
+		arg.ToStatus,
+		arg.ChangedAt,
+		arg.ChangedBy,
+	)
+	return err
+}
+
 const getLeakageCase = `-- name: GetLeakageCase :one
 SELECT
     id,
@@ -63,6 +102,49 @@ func (q *Queries) GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) 
 		&i.TraceID,
 	)
 	return i, err
+}
+
+const listCaseStatusHistoryByCase = `-- name: ListCaseStatusHistoryByCase :many
+SELECT
+    id,
+    case_id,
+    from_status,
+    to_status,
+    changed_at,
+    changed_by
+FROM case_status_history
+WHERE case_id = ?1
+ORDER BY changed_at ASC, id ASC
+`
+
+func (q *Queries) ListCaseStatusHistoryByCase(ctx context.Context, caseID string) ([]CaseStatusHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listCaseStatusHistoryByCase, caseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CaseStatusHistory{}
+	for rows.Next() {
+		var i CaseStatusHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.CaseID,
+			&i.FromStatus,
+			&i.ToStatus,
+			&i.ChangedAt,
+			&i.ChangedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLeakageCases = `-- name: ListLeakageCases :many
@@ -240,4 +322,46 @@ func (q *Queries) ListRootCausesByCase(ctx context.Context, caseID string) ([]Ro
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateLeakageCaseAssignee = `-- name: UpdateLeakageCaseAssignee :execrows
+UPDATE leakage_cases
+SET assignee = ?1
+WHERE tenant_id = ?2
+  AND id = ?3
+`
+
+type UpdateLeakageCaseAssigneeParams struct {
+	Assignee string `json:"assignee"`
+	TenantID string `json:"tenant_id"`
+	CaseID   string `json:"case_id"`
+}
+
+func (q *Queries) UpdateLeakageCaseAssignee(ctx context.Context, arg UpdateLeakageCaseAssigneeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateLeakageCaseAssignee, arg.Assignee, arg.TenantID, arg.CaseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateLeakageCaseStatus = `-- name: UpdateLeakageCaseStatus :execrows
+UPDATE leakage_cases
+SET status = ?1
+WHERE tenant_id = ?2
+  AND id = ?3
+`
+
+type UpdateLeakageCaseStatusParams struct {
+	Status   string `json:"status"`
+	TenantID string `json:"tenant_id"`
+	CaseID   string `json:"case_id"`
+}
+
+func (q *Queries) UpdateLeakageCaseStatus(ctx context.Context, arg UpdateLeakageCaseStatusParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateLeakageCaseStatus, arg.Status, arg.TenantID, arg.CaseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

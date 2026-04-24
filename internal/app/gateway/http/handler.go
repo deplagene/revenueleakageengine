@@ -21,6 +21,10 @@ var ErrReconciliationRunnerRequired = errors.New("reconciliation runner is requi
 // query dependency.
 var ErrCaseQueriesRequired = errors.New("case queries are required")
 
+// ErrCaseCommandsRequired reports that HTTP routes were created without a case
+// command dependency.
+var ErrCaseCommandsRequired = errors.New("case commands are required")
+
 type reconciliationRunner interface {
 	RunRevenueLeakageCheck(
 		ctx context.Context,
@@ -39,16 +43,29 @@ type caseQueries interface {
 	) (caseapp.GetCaseResult, error)
 }
 
+type caseCommands interface {
+	UpdateCaseStatus(
+		ctx context.Context,
+		cmd caseapp.UpdateCaseStatusCommand,
+	) (caseapp.UpdateCaseStatusResult, error)
+	UpdateCaseAssignee(
+		ctx context.Context,
+		cmd caseapp.UpdateCaseAssigneeCommand,
+	) (caseapp.UpdateCaseAssigneeResult, error)
+}
+
 // Handler registers HTTP routes backed by application use cases.
 type Handler struct {
 	reconciliation reconciliationRunner
 	cases          caseQueries
+	caseCommands   caseCommands
 }
 
 // NewHandler constructs the gateway HTTP handler set.
 func NewHandler(
 	reconciliation reconciliationRunner,
 	cases caseQueries,
+	caseCommands caseCommands,
 ) (*Handler, error) {
 	if reconciliation == nil {
 		return nil, ErrReconciliationRunnerRequired
@@ -58,9 +75,14 @@ func NewHandler(
 		return nil, ErrCaseQueriesRequired
 	}
 
+	if caseCommands == nil {
+		return nil, ErrCaseCommandsRequired
+	}
+
 	return &Handler{
 		reconciliation: reconciliation,
 		cases:          cases,
+		caseCommands:   caseCommands,
 	}, nil
 }
 
@@ -70,6 +92,8 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 		router.Post("/reconciliation/run", h.handleRunReconciliation)
 		router.Get("/cases", h.handleListCases)
 		router.Get("/cases/{case_id}", h.handleGetCase)
+		router.Patch("/cases/{case_id}/status", h.handlePatchCaseStatus)
+		router.Patch("/cases/{case_id}/assignee", h.handlePatchCaseAssignee)
 	})
 }
 

@@ -49,6 +49,15 @@ type BillableItem struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+type CaseStatusHistory struct {
+	ID         string `json:"id"`
+	CaseID     string `json:"case_id"`
+	FromStatus string `json:"from_status"`
+	ToStatus   string `json:"to_status"`
+	ChangedAt  string `json:"changed_at"`
+	ChangedBy  string `json:"changed_by"`
+}
+
 type Contract struct {
 	ID           string         `json:"id"`
 	TenantID     string         `json:"tenant_id"`

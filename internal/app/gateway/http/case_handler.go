@@ -20,9 +20,10 @@ type listCasesResponse struct {
 }
 
 type getCaseResponse struct {
-	Case       caseResponse           `json:"case"`
-	Evidence   []caseEvidenceResponse `json:"evidence"`
-	RootCauses []rootCauseResponse    `json:"root_causes"`
+	Case       caseResponse                `json:"case"`
+	Evidence   []caseEvidenceResponse      `json:"evidence"`
+	RootCauses []rootCauseResponse         `json:"root_causes"`
+	History    []caseStatusHistoryResponse `json:"status_history"`
 }
 
 type caseResponse struct {
@@ -65,6 +66,33 @@ type rootCauseResponse struct {
 	CreatedAt                  string `json:"created_at"`
 }
 
+type caseStatusHistoryResponse struct {
+	ID         string `json:"id"`
+	FromStatus string `json:"from_status"`
+	ToStatus   string `json:"to_status"`
+	ChangedAt  string `json:"changed_at"`
+	ChangedBy  string `json:"changed_by"`
+}
+
+type patchCaseStatusRequest struct {
+	TenantID  string `json:"tenant_id"`
+	Status    string `json:"status"`
+	ChangedBy string `json:"changed_by"`
+}
+
+type patchCaseStatusResponse struct {
+	Case caseResponse `json:"case"`
+}
+
+type patchCaseAssigneeRequest struct {
+	TenantID string `json:"tenant_id"`
+	Assignee string `json:"assignee"`
+}
+
+type patchCaseAssigneeResponse struct {
+	Case caseResponse `json:"case"`
+}
+
 func (h *Handler) handleListCases(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	command, err := listCasesCommandFromRequest(r)
 	if err != nil {
@@ -100,6 +128,64 @@ func (h *Handler) handleGetCase(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	}
 
 	writeJSON(w, stdhttp.StatusOK, newGetCaseResponse(result))
+}
+
+func (h *Handler) handlePatchCaseStatus(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	var request patchCaseStatusRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	command, err := patchCaseStatusCommandFromRequest(r, request)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	result, err := h.caseCommands.UpdateCaseStatus(r.Context(), command)
+	if err != nil {
+		statusCode := stdhttp.StatusUnprocessableEntity
+		if errors.Is(err, caseapp.ErrCaseNotFound) {
+			statusCode = stdhttp.StatusNotFound
+		}
+
+		writeError(w, statusCode, err.Error())
+		return
+	}
+
+	writeJSON(w, stdhttp.StatusOK, patchCaseStatusResponse{
+		Case: newCaseResponse(result.Case),
+	})
+}
+
+func (h *Handler) handlePatchCaseAssignee(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	var request patchCaseAssigneeRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	command, err := patchCaseAssigneeCommandFromRequest(r, request)
+	if err != nil {
+		writeError(w, stdhttp.StatusBadRequest, err.Error())
+		return
+	}
+
+	result, err := h.caseCommands.UpdateCaseAssignee(r.Context(), command)
+	if err != nil {
+		statusCode := stdhttp.StatusUnprocessableEntity
+		if errors.Is(err, caseapp.ErrCaseNotFound) {
+			statusCode = stdhttp.StatusNotFound
+		}
+
+		writeError(w, statusCode, err.Error())
+		return
+	}
+
+	writeJSON(w, stdhttp.StatusOK, patchCaseAssigneeResponse{
+		Case: newCaseResponse(result.Case),
+	})
 }
 
 func listCasesCommandFromRequest(r *stdhttp.Request) (caseapp.ListCasesCommand, error) {
@@ -165,6 +251,54 @@ func getCaseCommandFromRequest(r *stdhttp.Request) (caseapp.GetCaseCommand, erro
 	}, nil
 }
 
+func patchCaseStatusCommandFromRequest(
+	r *stdhttp.Request,
+	request patchCaseStatusRequest,
+) (caseapp.UpdateCaseStatusCommand, error) {
+	tenantID, err := parseUUID("tenant id", request.TenantID)
+	if err != nil {
+		return caseapp.UpdateCaseStatusCommand{}, err
+	}
+
+	caseID, err := parseUUID("case id", chi.URLParam(r, "case_id"))
+	if err != nil {
+		return caseapp.UpdateCaseStatusCommand{}, err
+	}
+
+	status, err := parseCaseStatus(request.Status)
+	if err != nil {
+		return caseapp.UpdateCaseStatusCommand{}, err
+	}
+
+	return caseapp.UpdateCaseStatusCommand{
+		TenantID:  tenantID,
+		CaseID:    caseID,
+		Status:    status,
+		ChangedBy: request.ChangedBy,
+	}, nil
+}
+
+func patchCaseAssigneeCommandFromRequest(
+	r *stdhttp.Request,
+	request patchCaseAssigneeRequest,
+) (caseapp.UpdateCaseAssigneeCommand, error) {
+	tenantID, err := parseUUID("tenant id", request.TenantID)
+	if err != nil {
+		return caseapp.UpdateCaseAssigneeCommand{}, err
+	}
+
+	caseID, err := parseUUID("case id", chi.URLParam(r, "case_id"))
+	if err != nil {
+		return caseapp.UpdateCaseAssigneeCommand{}, err
+	}
+
+	return caseapp.UpdateCaseAssigneeCommand{
+		TenantID: tenantID,
+		CaseID:   caseID,
+		Assignee: request.Assignee,
+	}, nil
+}
+
 func newGetCaseResponse(result caseapp.GetCaseResult) getCaseResponse {
 	evidence := make([]caseEvidenceResponse, 0, len(result.Evidence))
 	for _, item := range result.Evidence {
@@ -191,10 +325,22 @@ func newGetCaseResponse(result caseapp.GetCaseResult) getCaseResponse {
 		})
 	}
 
+	history := make([]caseStatusHistoryResponse, 0, len(result.History))
+	for _, item := range result.History {
+		history = append(history, caseStatusHistoryResponse{
+			ID:         item.ID.String(),
+			FromStatus: string(item.FromStatus),
+			ToStatus:   string(item.ToStatus),
+			ChangedAt:  item.ChangedAt.UTC().Format(time.RFC3339Nano),
+			ChangedBy:  item.ChangedBy,
+		})
+	}
+
 	return getCaseResponse{
 		Case:       newCaseResponse(result.Case),
 		Evidence:   evidence,
 		RootCauses: rootCauses,
+		History:    history,
 	}
 }
 
@@ -239,6 +385,10 @@ func optionalCaseStatus(raw string) (leakage.Status, error) {
 		return "", nil
 	}
 
+	return parseCaseStatus(raw)
+}
+
+func parseCaseStatus(raw string) (leakage.Status, error) {
 	switch leakage.Status(raw) {
 	case leakage.StatusOpen:
 		return leakage.StatusOpen, nil

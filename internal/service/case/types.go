@@ -24,6 +24,12 @@ var (
 	// ErrCaseNotFound reports that the requested case does not exist in the
 	// requested tenant scope.
 	ErrCaseNotFound = errors.New("case not found")
+	// ErrStatusRequired reports that a case status update was requested without
+	// a target status.
+	ErrStatusRequired = errors.New("status is required")
+	// ErrAssigneeRequired reports that a case assignee update was requested
+	// without a target assignee.
+	ErrAssigneeRequired = errors.New("assignee is required")
 	// ErrLimitInvalid reports that the requested page size is not positive.
 	ErrLimitInvalid = errors.New("limit must be greater than zero")
 	// ErrOffsetInvalid reports that the requested page offset is negative.
@@ -99,4 +105,72 @@ type GetCaseResult struct {
 	Case       leakage.Case
 	Evidence   []leakage.Evidence
 	RootCauses []leakage.RootCause
+	History    []leakage.StatusHistory
+}
+
+// UpdateCaseStatusCommand describes one lifecycle transition request for a
+// leakage case.
+type UpdateCaseStatusCommand struct {
+	TenantID  uuid.UUID
+	CaseID    uuid.UUID
+	Status    leakage.Status
+	ChangedBy string
+}
+
+// Validate checks that the status update request is structurally valid.
+func (c UpdateCaseStatusCommand) Validate() error {
+	if c.TenantID == uuid.Nil {
+		return ErrTenantRequired
+	}
+
+	if c.CaseID == uuid.Nil {
+		return ErrCaseIDRequired
+	}
+
+	if c.Status == "" {
+		return ErrStatusRequired
+	}
+
+	if err := c.Status.Validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UpdateCaseStatusResult contains the updated case after a successful status
+// transition or no-op idempotent request.
+type UpdateCaseStatusResult struct {
+	Case leakage.Case
+}
+
+// UpdateCaseAssigneeCommand describes one ownership update request for a
+// leakage case.
+type UpdateCaseAssigneeCommand struct {
+	TenantID uuid.UUID
+	CaseID   uuid.UUID
+	Assignee string
+}
+
+// Validate checks that the assignee update request is structurally valid.
+func (c UpdateCaseAssigneeCommand) Validate() error {
+	if c.TenantID == uuid.Nil {
+		return ErrTenantRequired
+	}
+
+	if c.CaseID == uuid.Nil {
+		return ErrCaseIDRequired
+	}
+
+	if c.Assignee == "" {
+		return ErrAssigneeRequired
+	}
+
+	return nil
+}
+
+// UpdateCaseAssigneeResult contains the updated case after a successful
+// ownership change or no-op idempotent request.
+type UpdateCaseAssigneeResult struct {
+	Case leakage.Case
 }

@@ -11,16 +11,20 @@ import (
 type Querier interface {
 	CompleteReconciliationRun(ctx context.Context, arg CompleteReconciliationRunParams) error
 	CreateActualRevenueEntry(ctx context.Context, arg CreateActualRevenueEntryParams) error
+	CreateCaseStatusHistory(ctx context.Context, arg CreateCaseStatusHistoryParams) error
 	CreateExpectedRevenueEntry(ctx context.Context, arg CreateExpectedRevenueEntryParams) error
 	CreateLeakageCase(ctx context.Context, arg CreateLeakageCaseParams) error
 	CreateLeakageEvidence(ctx context.Context, arg CreateLeakageEvidenceParams) error
 	CreateReconciliationRun(ctx context.Context, arg CreateReconciliationRunParams) error
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
 	ListActualRevenueByContractPeriod(ctx context.Context, arg ListActualRevenueByContractPeriodParams) ([]ActualRevenueEntry, error)
+	ListCaseStatusHistoryByCase(ctx context.Context, caseID string) ([]CaseStatusHistory, error)
 	ListExpectedRevenueByContractPeriod(ctx context.Context, arg ListExpectedRevenueByContractPeriodParams) ([]ExpectedRevenueEntry, error)
 	ListLeakageCases(ctx context.Context, arg ListLeakageCasesParams) ([]LeakageCase, error)
 	ListLeakageEvidenceByCase(ctx context.Context, caseID string) ([]LeakageEvidence, error)
 	ListRootCausesByCase(ctx context.Context, caseID string) ([]RootCause, error)
+	UpdateLeakageCaseAssignee(ctx context.Context, arg UpdateLeakageCaseAssigneeParams) (int64, error)
+	UpdateLeakageCaseStatus(ctx context.Context, arg UpdateLeakageCaseStatusParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

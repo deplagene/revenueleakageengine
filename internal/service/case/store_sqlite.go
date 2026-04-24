@@ -18,12 +18,14 @@ var _ Store = (*SQLiteStore)(nil)
 
 // SQLiteStore loads leakage cases from SQLite-backed sqlc queries.
 type SQLiteStore struct {
+	db      *sql.DB
 	queries *sqlitedb.Queries
 }
 
 // NewSQLiteStore creates a case store backed by a SQLite database.
 func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 	return &SQLiteStore{
+		db:      db,
 		queries: sqlitedb.New(db),
 	}
 }
@@ -105,11 +107,96 @@ func (s *SQLiteStore) GetCase(ctx context.Context, cmd GetCaseCommand) (GetCaseR
 		rootCauses = append(rootCauses, item)
 	}
 
+	historyRows, err := s.queries.ListCaseStatusHistoryByCase(ctx, cmd.CaseID.String())
+	if err != nil {
+		return GetCaseResult{}, fmt.Errorf("list case status history: %w", err)
+	}
+
+	history := make([]leakage.StatusHistory, 0, len(historyRows))
+	for _, row := range historyRows {
+		item, err := statusHistoryFromRow(row)
+		if err != nil {
+			return GetCaseResult{}, err
+		}
+
+		history = append(history, item)
+	}
+
 	return GetCaseResult{
 		Case:       c,
 		Evidence:   evidence,
 		RootCauses: rootCauses,
+		History:    history,
 	}, nil
+}
+
+// UpdateCaseStatus persists one status change together with its audit record.
+func (s *SQLiteStore) UpdateCaseStatus(
+	ctx context.Context,
+	c leakage.Case,
+	history leakage.StatusHistory,
+) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin case status transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	queries := s.queries.WithTx(tx)
+	updatedRows, err := queries.UpdateLeakageCaseStatus(ctx, sqlitedb.UpdateLeakageCaseStatusParams{
+		Status:   string(c.Status),
+		TenantID: c.TenantID.String(),
+		CaseID:   c.ID.String(),
+	})
+	if err != nil {
+		return fmt.Errorf("update leakage case status: %w", err)
+	}
+
+	if updatedRows == 0 {
+		return ErrCaseNotFound
+	}
+
+	if err := queries.CreateCaseStatusHistory(ctx, sqlitedb.CreateCaseStatusHistoryParams{
+		ID:         history.ID.String(),
+		CaseID:     history.CaseID.String(),
+		FromStatus: string(history.FromStatus),
+		ToStatus:   string(history.ToStatus),
+		ChangedAt:  history.ChangedAt.UTC().Format(time.RFC3339Nano),
+		ChangedBy:  history.ChangedBy,
+	}); err != nil {
+		return fmt.Errorf("create case status history: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit case status transaction: %w", err)
+	}
+
+	committed = true
+	return nil
+}
+
+// UpdateCaseAssignee persists one ownership change for a leakage case.
+func (s *SQLiteStore) UpdateCaseAssignee(ctx context.Context, c leakage.Case) error {
+	updatedRows, err := s.queries.UpdateLeakageCaseAssignee(ctx, sqlitedb.UpdateLeakageCaseAssigneeParams{
+		Assignee: c.Assignee,
+		TenantID: c.TenantID.String(),
+		CaseID:   c.ID.String(),
+	})
+	if err != nil {
+		return fmt.Errorf("update leakage case assignee: %w", err)
+	}
+
+	if updatedRows == 0 {
+		return ErrCaseNotFound
+	}
+
+	return nil
 }
 
 func leakageCaseFromRow(row sqlitedb.LeakageCase) (leakage.Case, error) {
@@ -261,6 +348,32 @@ func rootCauseFromRow(row sqlitedb.RootCause) (leakage.RootCause, error) {
 		ConfidenceScore: confidenceScore,
 		DerivedBy:       leakage.DerivedBy(row.DerivedBy),
 		CreatedAt:       createdAt.UTC(),
+	}, nil
+}
+
+func statusHistoryFromRow(row sqlitedb.CaseStatusHistory) (leakage.StatusHistory, error) {
+	id, err := uuid.Parse(row.ID)
+	if err != nil {
+		return leakage.StatusHistory{}, fmt.Errorf("parse case status history id: %w", err)
+	}
+
+	caseID, err := uuid.Parse(row.CaseID)
+	if err != nil {
+		return leakage.StatusHistory{}, fmt.Errorf("parse case status history case id: %w", err)
+	}
+
+	changedAt, err := time.Parse(time.RFC3339Nano, row.ChangedAt)
+	if err != nil {
+		return leakage.StatusHistory{}, fmt.Errorf("parse case status history changed at: %w", err)
+	}
+
+	return leakage.StatusHistory{
+		ID:         id,
+		CaseID:     caseID,
+		FromStatus: leakage.Status(row.FromStatus),
+		ToStatus:   leakage.Status(row.ToStatus),
+		ChangedAt:  changedAt.UTC(),
+		ChangedBy:  row.ChangedBy,
 	}, nil
 }
 
