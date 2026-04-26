@@ -13,6 +13,7 @@ import (
 	"time"
 
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
+	"github.com/deplagene/revenueleakageengine/internal/app/config"
 	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
@@ -27,36 +28,6 @@ import (
 	"github.com/theartofdevel/logging"
 )
 
-type config struct {
-	HTTP       httpConfig
-	SQLite     sqliteConfig
-	Migrations migrationConfig
-	Logging    loggingConfig
-}
-
-type httpConfig struct {
-	Addr              string
-	ReadHeaderTimeout time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	ShutdownTimeout   time.Duration
-	RateLimit         int
-	RateLimitWindow   time.Duration
-}
-
-type sqliteConfig struct {
-	Path string
-}
-
-type migrationConfig struct {
-	Path string
-}
-
-type loggingConfig struct {
-	Level  string
-	IsJSON bool
-}
-
 // main is the process entrypoint.
 func main() {
 	if err := run(); err != nil {
@@ -67,7 +38,7 @@ func main() {
 
 func run() error {
 	ctx := context.Background()
-	cfg := loadConfig()
+	cfg := config.Load()
 	logger := newLogger(cfg.Logging)
 	ctx = logging.ContextWithLogger(ctx, logger)
 
@@ -102,31 +73,7 @@ func run() error {
 	return waitForShutdown(ctx, server, cfg.HTTP.ShutdownTimeout, errCh, logger)
 }
 
-func loadConfig() config {
-	return config{
-		HTTP: httpConfig{
-			Addr:              ":8080",
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			ShutdownTimeout:   10 * time.Second,
-			RateLimit:         100,
-			RateLimitWindow:   time.Minute,
-		},
-		SQLite: sqliteConfig{
-			Path: "./local.db",
-		},
-		Migrations: migrationConfig{
-			Path: "internal/platform/sqlite/migrations",
-		},
-		Logging: loggingConfig{
-			Level:  "",
-			IsJSON: true,
-		},
-	}
-}
-
-func newLogger(cfg loggingConfig) *logging.Logger {
+func newLogger(cfg config.LoggingConfig) *logging.Logger {
 	return logging.NewLogger(
 		logging.WithLevel(cfg.Level),
 		logging.WithIsJSON(cfg.IsJSON),
@@ -178,7 +125,7 @@ func buildCaseUseCases(db *sql.DB) (*caseapp.Queries, *caseapp.Commands, error) 
 
 func newRouter(
 	logger *logging.Logger,
-	cfg httpConfig,
+	cfg config.HTTPConfig,
 	handler *gatewayhttp.Handler,
 ) http.Handler {
 	router := chi.NewRouter()
@@ -200,7 +147,7 @@ func newRouter(
 	return router
 }
 
-func newHTTPServer(cfg httpConfig, handler http.Handler) *http.Server {
+func newHTTPServer(cfg config.HTTPConfig, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           handler,
