@@ -1,3 +1,5 @@
+// Package reconciliation contains application-level use cases that orchestrate
+// revenue calculation and reconciliation services.
 package reconciliation
 
 import (

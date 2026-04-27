@@ -12,44 +12,21 @@ import (
 	"syscall"
 	"time"
 
+	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
+	"github.com/deplagene/revenueleakageengine/internal/app/config"
+	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
+	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
 	"github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
+	casework "github.com/deplagene/revenueleakageengine/internal/service/case"
+	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
+	revenueservice "github.com/deplagene/revenueleakageengine/internal/service/revenue"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 	"github.com/theartofdevel/logging"
 )
-
-type config struct {
-	HTTP       httpConfig
-	SQLite     sqliteConfig
-	Migrations migrationConfig
-	Logging    loggingConfig
-}
-
-type httpConfig struct {
-	Addr              string
-	ReadHeaderTimeout time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	ShutdownTimeout   time.Duration
-	RateLimit         int
-	RateLimitWindow   time.Duration
-}
-
-type sqliteConfig struct {
-	Path string
-}
-
-type migrationConfig struct {
-	Path string
-}
-
-type loggingConfig struct {
-	Level  string
-	IsJSON bool
-}
 
 // main is the process entrypoint.
 func main() {
@@ -61,7 +38,7 @@ func main() {
 
 func run() error {
 	ctx := context.Background()
-	cfg := loadConfig()
+	cfg := config.Load()
 	logger := newLogger(cfg.Logging)
 	ctx = logging.ContextWithLogger(ctx, logger)
 
@@ -75,44 +52,82 @@ func run() error {
 		return err
 	}
 
-	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP))
+	reconciliationWorkflow, err := buildReconciliationWorkflow(db)
+	if err != nil {
+		return err
+	}
+
+	caseQueries, caseCommands, err := buildCaseUseCases(db)
+	if err != nil {
+		return err
+	}
+
+	httpHandler, err := gatewayhttp.NewHandler(reconciliationWorkflow, caseQueries, caseCommands)
+	if err != nil {
+		return fmt.Errorf("build http handler: %w", err)
+	}
+
+	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
 	errCh := startHTTPServer(server, logger)
 
 	return waitForShutdown(ctx, server, cfg.HTTP.ShutdownTimeout, errCh, logger)
 }
 
-func loadConfig() config {
-	return config{
-		HTTP: httpConfig{
-			Addr:              ":8080",
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			ShutdownTimeout:   10 * time.Second,
-			RateLimit:         100,
-			RateLimitWindow:   time.Minute,
-		},
-		SQLite: sqliteConfig{
-			Path: "./local.db",
-		},
-		Migrations: migrationConfig{
-			Path: "internal/platform/sqlite/migrations",
-		},
-		Logging: loggingConfig{
-			Level:  "",
-			IsJSON: true,
-		},
-	}
-}
-
-func newLogger(cfg loggingConfig) *logging.Logger {
+func newLogger(cfg config.LoggingConfig) *logging.Logger {
 	return logging.NewLogger(
 		logging.WithLevel(cfg.Level),
 		logging.WithIsJSON(cfg.IsJSON),
 	)
 }
 
-func newRouter(logger *logging.Logger, cfg httpConfig) http.Handler {
+func buildReconciliationWorkflow(db *sql.DB) (*appreconciliation.RevenueLeakageWorkflow, error) {
+	revenueStore := revenueservice.NewSQLiteStore(db)
+	revenueService := revenueservice.NewService(
+		revenueservice.WithStore(revenueStore),
+	)
+
+	reconciliationStore := reconciliationservice.NewSQLiteStore(db)
+	reconciliationService, err := reconciliationservice.NewService(reconciliationStore)
+	if err != nil {
+		return nil, fmt.Errorf("build reconciliation service: %w", err)
+	}
+
+	workflow, err := appreconciliation.NewRevenueLeakageWorkflow(
+		revenueService,
+		reconciliationService,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build reconciliation workflow: %w", err)
+	}
+
+	return workflow, nil
+}
+
+func buildCaseUseCases(db *sql.DB) (*caseapp.Queries, *caseapp.Commands, error) {
+	caseStore := casework.NewSQLiteStore(db)
+	caseService, err := casework.NewService(caseStore)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build case service: %w", err)
+	}
+
+	queries, err := caseapp.NewQueries(caseService)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build case queries: %w", err)
+	}
+
+	commands, err := caseapp.NewCommands(caseService)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build case commands: %w", err)
+	}
+
+	return queries, commands, nil
+}
+
+func newRouter(
+	logger *logging.Logger,
+	cfg config.HTTPConfig,
+	handler *gatewayhttp.Handler,
+) http.Handler {
 	router := chi.NewRouter()
 
 	router.Use(httpmiddleware.LoggerContext(logger))
@@ -127,10 +142,12 @@ func newRouter(logger *logging.Logger, cfg httpConfig) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	handler.RegisterRoutes(router)
+
 	return router
 }
 
-func newHTTPServer(cfg httpConfig, handler http.Handler) *http.Server {
+func newHTTPServer(cfg config.HTTPConfig, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           handler,

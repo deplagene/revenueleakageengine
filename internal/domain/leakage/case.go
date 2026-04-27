@@ -3,6 +3,7 @@
 package leakage
 
 import (
+	"errors"
 	"time"
 
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
@@ -44,6 +45,45 @@ const (
 	StatusResolved      Status = "resolved"
 	StatusDismissed     Status = "dismissed"
 )
+
+var (
+	// ErrInvalidStatus reports that a case status falls outside the supported
+	// lifecycle values.
+	ErrInvalidStatus = errors.New("invalid case status")
+	// ErrInvalidStatusTransition reports that a case status change violates the
+	// supported lifecycle transitions.
+	ErrInvalidStatusTransition = errors.New("invalid case status transition")
+)
+
+// Validate checks that the case status is one of the supported lifecycle
+// values.
+func (s Status) Validate() error {
+	switch s {
+	case StatusOpen, StatusInvestigating, StatusResolved, StatusDismissed:
+		return nil
+	default:
+		return ErrInvalidStatus
+	}
+}
+
+// CanTransitionTo reports whether a case may move from the current status to
+// the next status.
+func (s Status) CanTransitionTo(next Status) bool {
+	if s == next {
+		return true
+	}
+
+	switch s {
+	case StatusOpen:
+		return next == StatusInvestigating || next == StatusResolved || next == StatusDismissed
+	case StatusInvestigating:
+		return next == StatusOpen || next == StatusResolved || next == StatusDismissed
+	case StatusResolved, StatusDismissed:
+		return next == StatusInvestigating
+	default:
+		return false
+	}
+}
 
 // Case is the primary investigation record created from a revenue mismatch.
 type Case struct {

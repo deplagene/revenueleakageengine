@@ -318,6 +318,20 @@ CREATE INDEX leakage_cases_contract_period_idx
 CREATE INDEX leakage_cases_status_severity_idx
     ON leakage_cases(tenant_id, status, severity);
 
+CREATE TABLE case_status_history (
+    id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES leakage_cases(id) ON DELETE CASCADE,
+    from_status TEXT NOT NULL,
+    to_status TEXT NOT NULL,
+    changed_at TEXT NOT NULL,
+    changed_by TEXT NOT NULL DEFAULT '',
+    reason_code TEXT NOT NULL DEFAULT '',
+    comment TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX case_status_history_case_changed_idx
+    ON case_status_history(case_id, changed_at);
+
 CREATE TABLE leakage_evidence (
     id TEXT PRIMARY KEY,
     case_id TEXT NOT NULL REFERENCES leakage_cases(id) ON DELETE CASCADE,
