@@ -4,6 +4,9 @@ import (
 	"time"
 )
 
+// TODO: add config load logic from .env or yaml file
+// TODO: add methods to hide sensitive information (logging)
+
 // Config represents the application configuration.
 type Config struct {
 	HTTP       HTTPConfig
