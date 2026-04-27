@@ -27,6 +27,7 @@ const (
 // credit condition.
 type Term struct {
 	ID            uuid.UUID
+	TenantID      uuid.UUID
 	ContractID    uuid.UUID
 	Type          TermType
 	EffectiveFrom time.Time

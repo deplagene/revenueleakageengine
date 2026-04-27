@@ -7,11 +7,9 @@ import (
 	casework "github.com/deplagene/revenueleakageengine/internal/service/case"
 )
 
-var (
-	// ErrCommandsServiceRequired reports that case commands were created without
-	// a case service dependency.
-	ErrCommandsServiceRequired = errors.New("case service is required")
-)
+// ErrCommandsServiceRequired reports that case commands were created without
+// a case service dependency.
+var ErrCommandsServiceRequired = errors.New("case service is required")
 
 // UpdateCaseStatusCommand aliases the service-level lifecycle command at the
 // application boundary.

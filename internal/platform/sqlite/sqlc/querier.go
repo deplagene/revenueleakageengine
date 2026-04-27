@@ -16,15 +16,25 @@ type Querier interface {
 	CreateLeakageCase(ctx context.Context, arg CreateLeakageCaseParams) error
 	CreateLeakageEvidence(ctx context.Context, arg CreateLeakageEvidenceParams) error
 	CreateReconciliationRun(ctx context.Context, arg CreateReconciliationRunParams) error
+	GetBillableItem(ctx context.Context, id string) (BillableItem, error)
+	GetBillableItemByCode(ctx context.Context, arg GetBillableItemByCodeParams) (BillableItem, error)
+	GetContract(ctx context.Context, id string) (Contract, error)
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
 	ListActualRevenueByContractPeriod(ctx context.Context, arg ListActualRevenueByContractPeriodParams) ([]ActualRevenueEntry, error)
+	ListBillableItems(ctx context.Context, tenantID string) ([]BillableItem, error)
 	ListCaseStatusHistoryByCase(ctx context.Context, caseID string) ([]CaseStatusHistory, error)
+	ListContractTerms(ctx context.Context, contractID string) ([]ContractTerm, error)
+	ListContractsByCustomer(ctx context.Context, arg ListContractsByCustomerParams) ([]Contract, error)
+	ListEffectiveContractTerms(ctx context.Context, arg ListEffectiveContractTermsParams) ([]ContractTerm, error)
 	ListExpectedRevenueByContractPeriod(ctx context.Context, arg ListExpectedRevenueByContractPeriodParams) ([]ExpectedRevenueEntry, error)
 	ListLeakageCases(ctx context.Context, arg ListLeakageCasesParams) ([]LeakageCase, error)
 	ListLeakageEvidenceByCase(ctx context.Context, caseID string) ([]LeakageEvidence, error)
 	ListRootCausesByCase(ctx context.Context, caseID string) ([]RootCause, error)
 	UpdateLeakageCaseAssignee(ctx context.Context, arg UpdateLeakageCaseAssigneeParams) (int64, error)
 	UpdateLeakageCaseStatus(ctx context.Context, arg UpdateLeakageCaseStatusParams) (int64, error)
+	UpsertBillableItem(ctx context.Context, arg UpsertBillableItemParams) error
+	UpsertContract(ctx context.Context, arg UpsertContractParams) error
+	UpsertContractTerm(ctx context.Context, arg UpsertContractTermParams) error
 }
 
 var _ Querier = (*Queries)(nil)
