@@ -248,5 +248,10 @@ func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Comma
 
 func buildIngestionUseCases(db *sql.DB) (*ingestionapp.Commands, error) {
 	store := ingestionapp.NewSQLiteStore(db)
-	return ingestionapp.NewCommands(store), nil
+	commands, err := ingestionapp.NewCommands(store)
+	if err != nil {
+		return nil, fmt.Errorf("build ingestion commands: %w", err)
+	}
+
+	return commands, nil
 }

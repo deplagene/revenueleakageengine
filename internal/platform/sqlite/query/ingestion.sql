@@ -62,6 +62,18 @@ SET
   total_amount_minor_units = excluded.total_amount_minor_units,
   status = excluded.status;
 
+-- name: GetInvoiceBySourceExternal :one
+SELECT
+  *
+FROM
+  invoices
+WHERE
+  tenant_id = ?
+  AND source_system = ?
+  AND external_id = ?
+LIMIT
+  1;
+
 -- name: DeleteInvoiceLinesByInvoice :exec
 DELETE FROM invoice_lines
 WHERE

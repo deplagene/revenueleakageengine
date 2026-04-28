@@ -33,10 +33,14 @@ func (n *noopContractCommands) UpsertTerm(context.Context, *contract.Term) error
 
 type noopIngestionCommands struct{}
 
-func (n *noopIngestionCommands) IngestUsageRecords(ctx context.Context, records []*billing.UsageRecord) error {
+func (n *noopIngestionCommands) IngestUsageRecords(ctx context.Context, records []billing.UsageRecord) error {
 	return nil
 }
 
-func (n *noopIngestionCommands) IngestInvoice(ctx context.Context, inv *billing.Invoice, lines []billing.InvoiceLine) error {
+func (n *noopIngestionCommands) IngestInvoice(
+	ctx context.Context,
+	invoice billing.Invoice,
+	lines []billing.InvoiceLine,
+) error {
 	return nil
 }

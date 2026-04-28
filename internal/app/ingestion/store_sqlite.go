@@ -28,37 +28,60 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 	}
 }
 
-// UpsertUsageRecord inserts or updates a usage record by external id and source system.
-func (s *SQLiteStore) UpsertUsageRecord(ctx context.Context, u *billing.UsageRecord) error {
-	metadata, err := json.Marshal(u.Metadata)
+// UpsertUsageRecords inserts or updates usage records by external id and source
+// system in one transaction.
+func (s *SQLiteStore) UpsertUsageRecords(ctx context.Context, records []billing.UsageRecord) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("marshal usage metadata: %w", err)
+		return fmt.Errorf("begin usage records upsert tx: %w", err)
 	}
 
-	err = s.queries.UpsertUsageRecord(ctx, sqlitedb.UpsertUsageRecordParams{
-		ID:             u.ID.String(),
-		TenantID:       u.TenantID.String(),
-		CustomerID:     u.CustomerID.String(),
-		ContractID:     u.ContractID.String(),
-		BillableItemID: u.BillableItemID.String(),
-		ExternalID:     u.ExternalID,
-		UsageTime:      u.UsageTime.UTC().Format(time.RFC3339Nano),
-		Quantity:       u.Quantity,
-		Unit:           u.Unit,
-		SourceSystem:   u.SourceSystem,
-		TraceID:        u.TraceID,
-		MetadataJson:   string(metadata),
-		CreatedAt:      time.Now().UTC().Format(time.RFC3339Nano),
-	})
-	if err != nil {
-		return fmt.Errorf("upsert usage record: %w", err)
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	q := s.queries.WithTx(tx)
+	now := formatStoredTime(time.Now())
+
+	for _, record := range records {
+		metadata, err := encodeJSONMap("usage metadata", record.Metadata)
+		if err != nil {
+			return err
+		}
+
+		err = q.UpsertUsageRecord(ctx, sqlitedb.UpsertUsageRecordParams{
+			ID:             record.ID.String(),
+			TenantID:       record.TenantID.String(),
+			CustomerID:     record.CustomerID.String(),
+			ContractID:     record.ContractID.String(),
+			BillableItemID: record.BillableItemID.String(),
+			ExternalID:     record.ExternalID,
+			UsageTime:      formatStoredTime(record.UsageTime),
+			Quantity:       record.Quantity,
+			Unit:           record.Unit,
+			SourceSystem:   record.SourceSystem,
+			TraceID:        record.TraceID,
+			MetadataJson:   metadata,
+			CreatedAt:      now,
+		})
+		if err != nil {
+			return fmt.Errorf("upsert usage record %q: %w", record.ExternalID, err)
+		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit usage records upsert tx: %w", err)
+	}
+
+	committed = true
 	return nil
 }
 
 // UpsertInvoice inserts or updates an invoice and its lines by external id and source system.
-func (s *SQLiteStore) UpsertInvoice(ctx context.Context, inv *billing.Invoice, lines []billing.InvoiceLine) error {
+func (s *SQLiteStore) UpsertInvoice(ctx context.Context, inv billing.Invoice, lines []billing.InvoiceLine) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin invoice upsert tx: %w", err)
@@ -72,11 +95,7 @@ func (s *SQLiteStore) UpsertInvoice(ctx context.Context, inv *billing.Invoice, l
 	}()
 
 	q := s.queries.WithTx(tx)
-
-	var dueAt sql.NullString
-	if !inv.DueAt.IsZero() {
-		dueAt = sql.NullString{String: inv.DueAt.UTC().Format(time.RFC3339Nano), Valid: true}
-	}
+	now := formatStoredTime(time.Now())
 
 	err = q.UpsertInvoice(ctx, sqlitedb.UpsertInvoiceParams{
 		ID:                    inv.ID.String(),
@@ -85,54 +104,58 @@ func (s *SQLiteStore) UpsertInvoice(ctx context.Context, inv *billing.Invoice, l
 		ContractID:            inv.ContractID.String(),
 		ExternalID:            inv.ExternalID,
 		InvoiceNumber:         inv.Number,
-		PeriodStart:           inv.Period.Start.UTC().Format(time.RFC3339Nano),
-		PeriodEnd:             inv.Period.End.UTC().Format(time.RFC3339Nano),
-		IssuedAt:              inv.IssuedAt.UTC().Format(time.RFC3339Nano),
-		DueAt:                 dueAt,
+		PeriodStart:           formatStoredTime(inv.Period.Start),
+		PeriodEnd:             formatStoredTime(inv.Period.End),
+		IssuedAt:              formatStoredTime(inv.IssuedAt),
+		DueAt:                 nullableStoredTime(inv.DueAt),
 		Currency:              inv.TotalAmount.Currency,
 		TotalAmountMinorUnits: inv.TotalAmount.MinorUnits,
 		Status:                string(inv.Status),
 		SourceSystem:          inv.SourceSystem,
-		CreatedAt:             time.Now().UTC().Format(time.RFC3339Nano),
+		CreatedAt:             now,
 	})
 	if err != nil {
 		return fmt.Errorf("upsert invoice: %w", err)
 	}
 
-	err = q.DeleteInvoiceLinesByInvoice(ctx, inv.ID.String())
+	persistedInvoice, err := q.GetInvoiceBySourceExternal(ctx, sqlitedb.GetInvoiceBySourceExternalParams{
+		TenantID:     inv.TenantID.String(),
+		SourceSystem: inv.SourceSystem,
+		ExternalID:   inv.ExternalID,
+	})
+	if err != nil {
+		return fmt.Errorf("get persisted invoice: %w", err)
+	}
+
+	err = q.DeleteInvoiceLinesByInvoice(ctx, persistedInvoice.ID)
 	if err != nil {
 		return fmt.Errorf("delete old invoice lines: %w", err)
 	}
 
-	for _, l := range lines {
-		pricing, err := json.Marshal(l.PricingSnapshot)
+	for _, line := range lines {
+		pricing, err := encodeJSONMap("invoice line pricing snapshot", line.PricingSnapshot)
 		if err != nil {
-			return fmt.Errorf("marshal invoice line pricing snapshot: %w", err)
-		}
-
-		var itemID sql.NullString
-		if l.BillableItemID != uuid.Nil {
-			itemID = sql.NullString{String: l.BillableItemID.String(), Valid: true}
+			return err
 		}
 
 		err = q.CreateInvoiceLine(ctx, sqlitedb.CreateInvoiceLineParams{
-			ID:                       l.ID.String(),
-			InvoiceID:                inv.ID.String(),
+			ID:                       line.ID.String(),
+			InvoiceID:                persistedInvoice.ID,
 			TenantID:                 inv.TenantID.String(),
-			BillableItemID:           itemID,
-			Description:              l.Description,
-			Quantity:                 l.Quantity,
-			UnitPriceMinorUnits:      l.UnitPrice.MinorUnits,
-			DiscountAmountMinorUnits: l.DiscountAmount.MinorUnits,
-			TaxAmountMinorUnits:      l.TaxAmount.MinorUnits,
-			LineTotalMinorUnits:      l.LineTotal.MinorUnits,
-			Currency:                 l.UnitPrice.Currency,
-			SourceRef:                l.SourceRef,
-			PricingSnapshotJson:      string(pricing),
-			CreatedAt:                time.Now().UTC().Format(time.RFC3339Nano),
+			BillableItemID:           nullableUUID(line.BillableItemID),
+			Description:              line.Description,
+			Quantity:                 line.Quantity,
+			UnitPriceMinorUnits:      line.UnitPrice.MinorUnits,
+			DiscountAmountMinorUnits: line.DiscountAmount.MinorUnits,
+			TaxAmountMinorUnits:      line.TaxAmount.MinorUnits,
+			LineTotalMinorUnits:      line.LineTotal.MinorUnits,
+			Currency:                 line.UnitPrice.Currency,
+			SourceRef:                line.SourceRef,
+			PricingSnapshotJson:      pricing,
+			CreatedAt:                now,
 		})
 		if err != nil {
-			return fmt.Errorf("create invoice line: %w", err)
+			return fmt.Errorf("create invoice line %q: %w", line.ID, err)
 		}
 	}
 
@@ -142,4 +165,43 @@ func (s *SQLiteStore) UpsertInvoice(ctx context.Context, inv *billing.Invoice, l
 	committed = true
 
 	return nil
+}
+
+func encodeJSONMap(field string, value map[string]any) (string, error) {
+	if value == nil {
+		return "{}", nil
+	}
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("encode %s json: %w", field, err)
+	}
+
+	return string(encoded), nil
+}
+
+func formatStoredTime(value time.Time) string {
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func nullableStoredTime(value time.Time) sql.NullString {
+	if value.IsZero() {
+		return sql.NullString{}
+	}
+
+	return sql.NullString{
+		String: formatStoredTime(value),
+		Valid:  true,
+	}
+}
+
+func nullableUUID(value uuid.UUID) sql.NullString {
+	if value == uuid.Nil {
+		return sql.NullString{}
+	}
+
+	return sql.NullString{
+		String: value.String(),
+		Valid:  true,
+	}
 }

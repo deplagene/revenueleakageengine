@@ -2,17 +2,54 @@ package http
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
-	"github.com/google/uuid"
 )
 
 type ingestionCommands interface {
-	IngestUsageRecords(ctx context.Context, records []*billing.UsageRecord) error
-	IngestInvoice(ctx context.Context, inv *billing.Invoice, lines []billing.InvoiceLine) error
+	IngestUsageRecords(ctx context.Context, records []billing.UsageRecord) error
+	IngestInvoice(ctx context.Context, invoice billing.Invoice, lines []billing.InvoiceLine) error
+}
+
+type ingestionResponse struct {
+	Status       string `json:"status"`
+	UsageRecords int    `json:"usage_records,omitempty"`
+	Invoices     int    `json:"invoices,omitempty"`
+	InvoiceLines int    `json:"invoice_lines,omitempty"`
+}
+
+var ingestionValidationErrors = []error{
+	ingestionapp.ErrUsageRecordsRequired,
+	ingestionapp.ErrInvoiceRequired,
+	ingestionapp.ErrInvoiceLinesRequired,
+	billing.ErrUsageRecordIDRequired,
+	billing.ErrTenantRequired,
+	billing.ErrCustomerRequired,
+	billing.ErrContractRequired,
+	billing.ErrBillableItemRequired,
+	billing.ErrExternalIDRequired,
+	billing.ErrSourceSystemRequired,
+	billing.ErrUsageTimeRequired,
+	billing.ErrUsageQuantityInvalid,
+	billing.ErrUsageUnitRequired,
+	billing.ErrInvoiceIDRequired,
+	billing.ErrInvoiceNumberRequired,
+	billing.ErrInvoiceIssuedAtRequired,
+	billing.ErrInvoiceDueAtInvalid,
+	billing.ErrInvoiceStatusRequired,
+	billing.ErrInvoiceStatusInvalid,
+	billing.ErrInvoiceLineIDRequired,
+	billing.ErrInvoiceLineInvoiceIDRequired,
+	billing.ErrInvoiceLineDescriptionRequired,
+	billing.ErrInvoiceLineQuantityInvalid,
+	billing.ErrInvoiceLineCurrencyMismatch,
+	valueobject.ErrInvalidBillingPeriod,
+	valueobject.ErrCurrencyRequired,
 }
 
 func (h *Handler) handleIngestUsage(w http.ResponseWriter, r *http.Request) {
@@ -38,15 +75,39 @@ func (h *Handler) handleIngestUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	records := make([]*billing.UsageRecord, 0, len(req.Records))
+	records := make([]billing.UsageRecord, 0, len(req.Records))
 	for _, rec := range req.Records {
-		id, _ := uuid.Parse(rec.ID)
-		tenantID, _ := uuid.Parse(rec.TenantID)
-		customerID, _ := uuid.Parse(rec.CustomerID)
-		contractID, _ := uuid.Parse(rec.ContractID)
-		billableItemID, _ := uuid.Parse(rec.BillableItemID)
+		id, err := optionalUUID("usage record id", rec.ID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 
-		records = append(records, &billing.UsageRecord{
+		tenantID, err := parseUUID("usage record tenant id", rec.TenantID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		customerID, err := parseUUID("usage record customer id", rec.CustomerID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		contractID, err := parseUUID("usage record contract id", rec.ContractID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		billableItemID, err := parseUUID("usage record billable item id", rec.BillableItemID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		records = append(records, billing.UsageRecord{
 			ID:             id,
 			TenantID:       tenantID,
 			CustomerID:     customerID,
@@ -63,11 +124,14 @@ func (h *Handler) handleIngestUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.ingestionCommands.IngestUsageRecords(r.Context(), records); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeIngestionError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, ingestionResponse{
+		Status:       "ok",
+		UsageRecords: len(records),
+	})
 }
 
 func (h *Handler) handleIngestInvoices(w http.ResponseWriter, r *http.Request) {
@@ -105,24 +169,43 @@ func (h *Handler) handleIngestInvoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, _ := uuid.Parse(req.ID)
-	tenantID, _ := uuid.Parse(req.TenantID)
-	customerID, _ := uuid.Parse(req.CustomerID)
-	contractID, _ := uuid.Parse(req.ContractID)
+	id, err := optionalUUID("invoice id", req.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	tenantID, err := parseUUID("invoice tenant id", req.TenantID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	customerID, err := parseUUID("invoice customer id", req.CustomerID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	contractID, err := parseUUID("invoice contract id", req.ContractID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	period, err := valueobject.NewBillingPeriod(req.PeriodStart, req.PeriodEnd)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid billing period")
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	totalAmount, err := valueobject.NewMoney(req.Currency, req.TotalAmount)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid total amount")
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	inv := &billing.Invoice{
+	invoice := billing.Invoice{
 		ID:           id,
 		TenantID:     tenantID,
 		CustomerID:   customerID,
@@ -139,12 +222,41 @@ func (h *Handler) handleIngestInvoices(w http.ResponseWriter, r *http.Request) {
 
 	lines := make([]billing.InvoiceLine, 0, len(req.Lines))
 	for _, l := range req.Lines {
-		lineID, _ := uuid.Parse(l.ID)
-		itemID, _ := uuid.Parse(l.BillableItemID)
-		up, _ := valueobject.NewMoney(req.Currency, l.UnitPrice)
-		da, _ := valueobject.NewMoney(req.Currency, l.DiscountAmount)
-		ta, _ := valueobject.NewMoney(req.Currency, l.TaxAmount)
-		lt, _ := valueobject.NewMoney(req.Currency, l.LineTotal)
+		lineID, err := optionalUUID("invoice line id", l.ID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		itemID, err := optionalUUID("invoice line billable item id", l.BillableItemID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		unitPrice, err := valueobject.NewMoney(req.Currency, l.UnitPrice)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		discountAmount, err := valueobject.NewMoney(req.Currency, l.DiscountAmount)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		taxAmount, err := valueobject.NewMoney(req.Currency, l.TaxAmount)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		lineTotal, err := valueobject.NewMoney(req.Currency, l.LineTotal)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 
 		lines = append(lines, billing.InvoiceLine{
 			ID:              lineID,
@@ -152,19 +264,42 @@ func (h *Handler) handleIngestInvoices(w http.ResponseWriter, r *http.Request) {
 			BillableItemID:  itemID,
 			Description:     l.Description,
 			Quantity:        l.Quantity,
-			UnitPrice:       up,
-			DiscountAmount:  da,
-			TaxAmount:       ta,
-			LineTotal:       lt,
+			UnitPrice:       unitPrice,
+			DiscountAmount:  discountAmount,
+			TaxAmount:       taxAmount,
+			LineTotal:       lineTotal,
 			SourceRef:       l.SourceRef,
 			PricingSnapshot: l.Pricing,
 		})
 	}
 
-	if err := h.ingestionCommands.IngestInvoice(r.Context(), inv, lines); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.ingestionCommands.IngestInvoice(r.Context(), invoice, lines); err != nil {
+		writeIngestionError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, ingestionResponse{
+		Status:       "ok",
+		Invoices:     1,
+		InvoiceLines: len(lines),
+	})
+}
+
+func writeIngestionError(w http.ResponseWriter, err error) {
+	if isIngestionValidationError(err) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeError(w, http.StatusInternalServerError, err.Error())
+}
+
+func isIngestionValidationError(err error) bool {
+	for _, target := range ingestionValidationErrors {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+
+	return false
 }

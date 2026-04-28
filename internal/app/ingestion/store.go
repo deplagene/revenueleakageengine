@@ -8,6 +8,6 @@ import (
 
 // Store defines persistence operations for ingestion.
 type Store interface {
-	UpsertUsageRecord(ctx context.Context, u *billing.UsageRecord) error
-	UpsertInvoice(ctx context.Context, inv *billing.Invoice, lines []billing.InvoiceLine) error
+	UpsertUsageRecords(ctx context.Context, records []billing.UsageRecord) error
+	UpsertInvoice(ctx context.Context, invoice billing.Invoice, lines []billing.InvoiceLine) error
 }

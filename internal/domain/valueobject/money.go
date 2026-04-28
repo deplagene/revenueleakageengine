@@ -44,6 +44,15 @@ func MustMoney(currency string, minorUnits int64) Money {
 	return money
 }
 
+// Validate checks that the money value carries a normalized currency code.
+func (m Money) Validate() error {
+	if strings.TrimSpace(m.Currency) == "" {
+		return ErrCurrencyRequired
+	}
+
+	return nil
+}
+
 // ZeroMoney returns a zero-valued money amount in the requested currency.
 func ZeroMoney(currency string) Money {
 	return MustMoney(currency, 0)

@@ -80,6 +80,48 @@ func (q *Queries) DeleteInvoiceLinesByInvoice(ctx context.Context, invoiceID str
 	return err
 }
 
+const getInvoiceBySourceExternal = `-- name: GetInvoiceBySourceExternal :one
+SELECT
+  id, tenant_id, customer_id, contract_id, external_id, invoice_number, period_start, period_end, issued_at, due_at, currency, total_amount_minor_units, status, source_system, created_at
+FROM
+  invoices
+WHERE
+  tenant_id = ?
+  AND source_system = ?
+  AND external_id = ?
+LIMIT
+  1
+`
+
+type GetInvoiceBySourceExternalParams struct {
+	TenantID     string `json:"tenant_id"`
+	SourceSystem string `json:"source_system"`
+	ExternalID   string `json:"external_id"`
+}
+
+func (q *Queries) GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoiceBySourceExternalParams) (Invoice, error) {
+	row := q.db.QueryRowContext(ctx, getInvoiceBySourceExternal, arg.TenantID, arg.SourceSystem, arg.ExternalID)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.CustomerID,
+		&i.ContractID,
+		&i.ExternalID,
+		&i.InvoiceNumber,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.IssuedAt,
+		&i.DueAt,
+		&i.Currency,
+		&i.TotalAmountMinorUnits,
+		&i.Status,
+		&i.SourceSystem,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const upsertInvoice = `-- name: UpsertInvoice :exec
 INSERT INTO
   invoices (

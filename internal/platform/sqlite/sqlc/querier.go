@@ -21,6 +21,7 @@ type Querier interface {
 	GetBillableItem(ctx context.Context, id string) (BillableItem, error)
 	GetBillableItemByCode(ctx context.Context, arg GetBillableItemByCodeParams) (BillableItem, error)
 	GetContract(ctx context.Context, id string) (Contract, error)
+	GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoiceBySourceExternalParams) (Invoice, error)
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
 	ListActualRevenueByContractPeriod(ctx context.Context, arg ListActualRevenueByContractPeriodParams) ([]ActualRevenueEntry, error)
 	ListBillableItems(ctx context.Context, tenantID string) ([]BillableItem, error)
