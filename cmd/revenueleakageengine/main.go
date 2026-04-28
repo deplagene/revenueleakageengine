@@ -227,7 +227,10 @@ func waitForShutdown(
 
 func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Commands, error) {
 	contractStore := contractwork.NewSQLiteStore(db)
-	contractService := contractwork.NewService(contractStore)
+	contractService, err := contractwork.NewService(contractStore)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build contract service: %w", err)
+	}
 
 	queries := contractapp.NewQueries(contractService)
 	commands := contractapp.NewCommands(contractService)

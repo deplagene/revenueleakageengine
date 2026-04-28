@@ -123,8 +123,9 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 		router.Post("/contracts", h.handleUpsertContract)
 		router.Get("/contracts/{contract_id}", h.handleGetContract)
 		router.Get("/contracts/{contract_id}/terms/effective", h.handleGetEffectiveTerms)
+		router.Post("/contracts/{contract_id}/terms", h.handleUpsertTerm)
 		router.Post("/contracts/billable-items", h.handleUpsertBillableItem)
-		router.Post("/contracts/terms", h.handleUpsertTerm)
+		router.Post("/contracts/terms", h.handleUpsertTermLegacy)
 	})
 }
 

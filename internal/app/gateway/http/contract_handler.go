@@ -2,24 +2,58 @@ package http
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/deplagene/revenueleakageengine/internal/domain/contract"
+	contractdomain "github.com/deplagene/revenueleakageengine/internal/domain/contract"
+	contractservice "github.com/deplagene/revenueleakageengine/internal/service/contract"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 type contractQueries interface {
-	GetContract(ctx context.Context, id uuid.UUID) (*contract.Contract, error)
-	ListContractsByCustomer(ctx context.Context, tenantID, customerID uuid.UUID) ([]*contract.Contract, error)
-	GetEffectiveTerms(ctx context.Context, contractID uuid.UUID, at time.Time) ([]*contract.Term, error)
+	GetContract(ctx context.Context, id uuid.UUID) (*contractdomain.Contract, error)
+	ListContractsByCustomer(ctx context.Context, tenantID, customerID uuid.UUID) ([]*contractdomain.Contract, error)
+	GetEffectiveTerms(ctx context.Context, contractID uuid.UUID, at time.Time) ([]*contractdomain.Term, error)
 }
 
 type contractCommands interface {
-	UpsertContract(ctx context.Context, con *contract.Contract) error
-	UpsertBillableItem(ctx context.Context, item *contract.BillableItem) error
-	UpsertTerm(ctx context.Context, term *contract.Term) error
+	UpsertContract(ctx context.Context, con *contractdomain.Contract) error
+	UpsertBillableItem(ctx context.Context, item *contractdomain.BillableItem) error
+	UpsertTerm(ctx context.Context, term *contractdomain.Term) error
+}
+
+var contractValidationErrors = []error{
+	contractservice.ErrContractRequired,
+	contractservice.ErrBillableItemRequired,
+	contractservice.ErrTermRequired,
+	contractdomain.ErrContractIDRequired,
+	contractdomain.ErrTenantRequired,
+	contractdomain.ErrCustomerRequired,
+	contractdomain.ErrStatusRequired,
+	contractdomain.ErrStatusInvalid,
+	contractdomain.ErrStartDateRequired,
+	contractdomain.ErrContractDateRangeInvalid,
+	contractdomain.ErrCurrencyRequired,
+	contractdomain.ErrVersionInvalid,
+	contractdomain.ErrBillingModelRequired,
+	contractdomain.ErrBillingModelInvalid,
+	contractdomain.ErrBillableItemIDRequired,
+	contractdomain.ErrBillableItemCodeRequired,
+	contractdomain.ErrBillableItemNameRequired,
+	contractdomain.ErrBillableItemUnitRequired,
+	contractdomain.ErrPricingModeRequired,
+	contractdomain.ErrPricingModeInvalid,
+	contractdomain.ErrBillableItemStatusRequired,
+	contractdomain.ErrBillableItemStatusInvalid,
+	contractdomain.ErrTermIDRequired,
+	contractdomain.ErrTermTypeRequired,
+	contractdomain.ErrTermTypeInvalid,
+	contractdomain.ErrEffectiveFromRequired,
+	contractdomain.ErrEffectiveRangeInvalid,
+	contractdomain.ErrTermExpressionRequired,
 }
 
 func (h *Handler) handleUpsertContract(w http.ResponseWriter, r *http.Request) {
@@ -43,31 +77,45 @@ func (h *Handler) handleUpsertContract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, _ := uuid.Parse(req.ID)
-	tenantID, _ := uuid.Parse(req.TenantID)
-	customerID, _ := uuid.Parse(req.CustomerID)
+	id, err := optionalUUID("id", req.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	con := &contract.Contract{
+	tenantID, err := requiredUUID("tenant_id", req.TenantID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	customerID, err := requiredUUID("customer_id", req.CustomerID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	con := &contractdomain.Contract{
 		ID:           id,
 		TenantID:     tenantID,
 		CustomerID:   customerID,
 		ExternalID:   req.ExternalID,
-		Status:       contract.Status(req.Status),
+		Status:       contractdomain.Status(req.Status),
 		StartDate:    req.StartDate,
 		EndDate:      req.EndDate,
 		Currency:     req.Currency,
 		Version:      req.Version,
-		BillingModel: contract.BillingModel(req.BillingModel),
+		BillingModel: contractdomain.BillingModel(req.BillingModel),
 		SignedAt:     req.SignedAt,
 		Metadata:     req.Metadata,
 	}
 
 	if err := h.contractCommands.UpsertContract(r.Context(), con); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeContractError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, con)
+	writeJSON(w, http.StatusCreated, con)
 }
 
 func (h *Handler) handleGetContract(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +128,7 @@ func (h *Handler) handleGetContract(w http.ResponseWriter, r *http.Request) {
 
 	con, err := h.contractQueries.GetContract(r.Context(), contractID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "contract not found")
+		writeContractError(w, err)
 		return
 	}
 
@@ -104,34 +152,59 @@ func (h *Handler) handleUpsertBillableItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	id, _ := uuid.Parse(req.ID)
-	tenantID, _ := uuid.Parse(req.TenantID)
+	id, err := optionalUUID("id", req.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	item := &contract.BillableItem{
+	tenantID, err := requiredUUID("tenant_id", req.TenantID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	item := &contractdomain.BillableItem{
 		ID:          id,
 		TenantID:    tenantID,
 		Code:        req.Code,
 		Name:        req.Name,
 		Category:    req.Category,
 		Unit:        req.Unit,
-		PricingMode: contract.PricingMode(req.PricingMode),
-		Status:      contract.BillableItemStatus(req.Status),
+		PricingMode: contractdomain.PricingMode(req.PricingMode),
+		Status:      contractdomain.BillableItemStatus(req.Status),
 	}
 
 	if err := h.contractCommands.UpsertBillableItem(r.Context(), item); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeContractError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusCreated, item)
 }
 
 func (h *Handler) handleUpsertTerm(w http.ResponseWriter, r *http.Request) {
+	contractID, ok := contractIDFromRoute(w, r)
+	if !ok {
+		return
+	}
+
+	h.upsertTerm(w, r, contractID)
+}
+
+func (h *Handler) handleUpsertTermLegacy(w http.ResponseWriter, r *http.Request) {
+	h.upsertTerm(w, r, uuid.Nil)
+}
+
+func (h *Handler) upsertTerm(w http.ResponseWriter, r *http.Request, routeContractID uuid.UUID) {
 	var req struct {
 		ID            string         `json:"id"`
 		TenantID      string         `json:"tenant_id"`
 		ContractID    string         `json:"contract_id"`
 		Type          string         `json:"type"`
+		Code          string         `json:"code"`
+		Amount        *int64         `json:"amount"`
+		Currency      string         `json:"currency"`
 		EffectiveFrom time.Time      `json:"effective_from"`
 		EffectiveTo   *time.Time     `json:"effective_to"`
 		Priority      int            `json:"priority"`
@@ -144,28 +217,55 @@ func (h *Handler) handleUpsertTerm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, _ := uuid.Parse(req.ID)
-	tenantID, _ := uuid.Parse(req.TenantID)
-	contractID, _ := uuid.Parse(req.ContractID)
+	id, err := optionalUUID("id", req.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	term := &contract.Term{
+	tenantID, err := optionalUUID("tenant_id", req.TenantID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	bodyContractID, err := optionalUUID("contract_id", req.ContractID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	contractID, err := resolveTermContractID(routeContractID, bodyContractID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	expression := termExpressionFromRequest(
+		req.Expression,
+		req.Code,
+		req.Amount,
+		req.Currency,
+	)
+
+	term := &contractdomain.Term{
 		ID:            id,
 		TenantID:      tenantID,
 		ContractID:    contractID,
-		Type:          contract.TermType(req.Type),
+		Type:          contractdomain.TermType(req.Type),
 		EffectiveFrom: req.EffectiveFrom,
 		EffectiveTo:   req.EffectiveTo,
 		Priority:      req.Priority,
-		Expression:    req.Expression,
+		Expression:    expression,
 		SourceRef:     req.SourceRef,
 	}
 
 	if err := h.contractCommands.UpsertTerm(r.Context(), term); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeContractError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, term)
+	writeJSON(w, http.StatusCreated, term)
 }
 
 func (h *Handler) handleGetEffectiveTerms(w http.ResponseWriter, r *http.Request) {
@@ -177,18 +277,103 @@ func (h *Handler) handleGetEffectiveTerms(w http.ResponseWriter, r *http.Request
 	}
 
 	atStr := r.URL.Query().Get("at")
-	at := time.Now()
+	at := time.Time{}
 	if atStr != "" {
-		if parsedAt, err := time.Parse(time.RFC3339, atStr); err == nil {
-			at = parsedAt
+		parsedAt, err := time.Parse(time.RFC3339, atStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid at timestamp")
+			return
 		}
+
+		at = parsedAt
 	}
 
 	terms, err := h.contractQueries.GetEffectiveTerms(r.Context(), contractID, at)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeContractError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, terms)
+}
+
+func contractIDFromRoute(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	contractID, err := requiredUUID("contract_id", chi.URLParam(r, "contract_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return uuid.Nil, false
+	}
+
+	return contractID, true
+}
+
+func requiredUUID(field string, value string) (uuid.UUID, error) {
+	id, err := parseUUID(field, value)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid %s", field)
+	}
+
+	return id, nil
+}
+
+func resolveTermContractID(routeContractID uuid.UUID, bodyContractID uuid.UUID) (uuid.UUID, error) {
+	if routeContractID != uuid.Nil {
+		if bodyContractID != uuid.Nil && bodyContractID != routeContractID {
+			return uuid.Nil, errors.New("contract_id does not match route")
+		}
+
+		return routeContractID, nil
+	}
+
+	if bodyContractID == uuid.Nil {
+		return uuid.Nil, errors.New("contract_id is required")
+	}
+
+	return bodyContractID, nil
+}
+
+func termExpressionFromRequest(
+	expression map[string]any,
+	code string,
+	amount *int64,
+	currency string,
+) map[string]any {
+	if expression == nil {
+		expression = map[string]any{}
+	}
+
+	if code != "" {
+		expression["code"] = code
+	}
+
+	if amount != nil {
+		expression["amount_minor_units"] = *amount
+	}
+
+	if currency != "" {
+		expression["currency"] = currency
+	}
+
+	return expression
+}
+
+func writeContractError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, contractservice.ErrContractNotFound):
+		writeError(w, http.StatusNotFound, contractservice.ErrContractNotFound.Error())
+	case isContractValidationError(err):
+		writeError(w, http.StatusBadRequest, err.Error())
+	default:
+		writeError(w, http.StatusInternalServerError, err.Error())
+	}
+}
+
+func isContractValidationError(err error) bool {
+	for _, target := range contractValidationErrors {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+
+	return false
 }
