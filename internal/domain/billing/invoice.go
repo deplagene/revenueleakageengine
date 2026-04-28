@@ -23,17 +23,18 @@ const (
 // Invoice represents an issued billing document for a contract and billing
 // period.
 type Invoice struct {
-	ID          uuid.UUID
-	TenantID    uuid.UUID
-	CustomerID  uuid.UUID
-	ContractID  uuid.UUID
-	ExternalID  string
-	Number      string
-	Period      valueobject.BillingPeriod
-	IssuedAt    time.Time
-	DueAt       time.Time
-	TotalAmount valueobject.Money
-	Status      InvoiceStatus
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	CustomerID   uuid.UUID
+	ContractID   uuid.UUID
+	ExternalID   string
+	Number       string
+	Period       valueobject.BillingPeriod
+	IssuedAt     time.Time
+	DueAt        time.Time
+	TotalAmount  valueobject.Money
+	Status       InvoiceStatus
+	SourceSystem string
 }
 
 // InvoiceLine represents one billable row inside an invoice together with the

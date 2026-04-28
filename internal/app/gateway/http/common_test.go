@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	"github.com/deplagene/revenueleakageengine/internal/domain/contract"
 	"github.com/google/uuid"
 )
@@ -29,3 +30,13 @@ func (n *noopContractCommands) UpsertBillableItem(context.Context, *contract.Bil
 	return nil
 }
 func (n *noopContractCommands) UpsertTerm(context.Context, *contract.Term) error { return nil }
+
+type noopIngestionCommands struct{}
+
+func (n *noopIngestionCommands) IngestUsageRecords(ctx context.Context, records []*billing.UsageRecord) error {
+	return nil
+}
+
+func (n *noopIngestionCommands) IngestInvoice(ctx context.Context, inv *billing.Invoice, lines []billing.InvoiceLine) error {
+	return nil
+}
