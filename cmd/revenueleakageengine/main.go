@@ -14,12 +14,14 @@ import (
 
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
 	"github.com/deplagene/revenueleakageengine/internal/app/config"
+	contractapp "github.com/deplagene/revenueleakageengine/internal/app/contract"
 	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
 	"github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
 	casework "github.com/deplagene/revenueleakageengine/internal/service/case"
+	contractwork "github.com/deplagene/revenueleakageengine/internal/service/contract"
 	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
 	revenueservice "github.com/deplagene/revenueleakageengine/internal/service/revenue"
 	"github.com/go-chi/chi/v5"
@@ -62,10 +64,18 @@ func run() error {
 		return err
 	}
 
-	httpHandler, err := gatewayhttp.NewHandler(reconciliationWorkflow, caseQueries, caseCommands)
+	contractQueries, contractCommands, err := buildContractUseCases(db)
 	if err != nil {
-		return fmt.Errorf("build http handler: %w", err)
+		return err
 	}
+
+	httpHandler, err := gatewayhttp.NewHandler(
+		reconciliationWorkflow,
+		caseQueries,
+		caseCommands,
+		contractQueries,
+		contractCommands,
+	)
 
 	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
 	errCh := startHTTPServer(server, logger)
@@ -213,4 +223,17 @@ func waitForShutdown(
 
 	logger.Info("http server stopped")
 	return nil
+}
+
+func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Commands, error) {
+	contractStore := contractwork.NewSQLiteStore(db)
+	contractService, err := contractwork.NewService(contractStore)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build contract service: %w", err)
+	}
+
+	queries := contractapp.NewQueries(contractService)
+	commands := contractapp.NewCommands(contractService)
+
+	return queries, commands, nil
 }

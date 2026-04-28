@@ -108,7 +108,7 @@ func TestHandlerRunReconciliation(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(runner, &stubCaseQueries{}, &stubCaseCommands{})
+	handler, err := NewHandler(runner, &stubCaseQueries{}, &stubCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestHandlerRunReconciliationBadRequest(t *testing.T) {
 
 	runner := &stubReconciliationRunner{}
 
-	handler, err := NewHandler(runner, &stubCaseQueries{}, &stubCaseCommands{})
+	handler, err := NewHandler(runner, &stubCaseQueries{}, &stubCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
 	if err != nil {
 		t.Fatalf("new handler: %v", err)
 	}

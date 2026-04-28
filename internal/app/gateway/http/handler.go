@@ -25,6 +25,14 @@ var ErrCaseQueriesRequired = errors.New("case queries are required")
 // command dependency.
 var ErrCaseCommandsRequired = errors.New("case commands are required")
 
+// ErrContractQueriesRequired reports that HTTP routes were created without a contract
+// query dependency.
+var ErrContractQueriesRequired = errors.New("contract queries are required")
+
+// ErrContractCommandsRequired reports that HTTP routes were created without a contract
+// command dependency.
+var ErrContractCommandsRequired = errors.New("contract commands are required")
+
 type reconciliationRunner interface {
 	RunRevenueLeakageCheck(
 		ctx context.Context,
@@ -56,9 +64,11 @@ type caseCommands interface {
 
 // Handler registers HTTP routes backed by application use cases.
 type Handler struct {
-	reconciliation reconciliationRunner
-	cases          caseQueries
-	caseCommands   caseCommands
+	reconciliation   reconciliationRunner
+	cases            caseQueries
+	caseCommands     caseCommands
+	contractQueries  contractQueries
+	contractCommands contractCommands
 }
 
 // NewHandler constructs the gateway HTTP handler set.
@@ -66,6 +76,8 @@ func NewHandler(
 	reconciliation reconciliationRunner,
 	cases caseQueries,
 	caseCommands caseCommands,
+	contractQueries contractQueries,
+	contractCommands contractCommands,
 ) (*Handler, error) {
 	if reconciliation == nil {
 		return nil, ErrReconciliationRunnerRequired
@@ -79,10 +91,20 @@ func NewHandler(
 		return nil, ErrCaseCommandsRequired
 	}
 
+	if contractQueries == nil {
+		return nil, ErrContractQueriesRequired
+	}
+
+	if contractCommands == nil {
+		return nil, ErrContractCommandsRequired
+	}
+
 	return &Handler{
-		reconciliation: reconciliation,
-		cases:          cases,
-		caseCommands:   caseCommands,
+		reconciliation:   reconciliation,
+		cases:            cases,
+		caseCommands:     caseCommands,
+		contractQueries:  contractQueries,
+		contractCommands: contractCommands,
 	}, nil
 }
 
@@ -96,6 +118,14 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 		router.Patch("/cases/{case_id}/resolve", h.handlePatchCaseResolve)
 		router.Patch("/cases/{case_id}/dismiss", h.handlePatchCaseDismiss)
 		router.Patch("/cases/{case_id}/assignee", h.handlePatchCaseAssignee)
+
+		// Contracts
+		router.Post("/contracts", h.handleUpsertContract)
+		router.Get("/contracts/{contract_id}", h.handleGetContract)
+		router.Get("/contracts/{contract_id}/terms/effective", h.handleGetEffectiveTerms)
+		router.Post("/contracts/{contract_id}/terms", h.handleUpsertTerm)
+		router.Post("/contracts/billable-items", h.handleUpsertBillableItem)
+		router.Post("/contracts/terms", h.handleUpsertTermLegacy)
 	})
 }
 
