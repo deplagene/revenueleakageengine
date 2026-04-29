@@ -136,3 +136,42 @@
   - Повторная доставка события не должна создавать дубли usage, invoices, runs или cases.
 
 ---
+
+## Спринт 8: AI-assisted Revenue Investigation
+
+**Цель:** Добавить ИИ-помощника для объяснения и расследования leakage cases без замены детерминированной финансовой логики.
+
+- **Роль ИИ**:
+  - Объяснять уже найденный leakage case простым языком.
+  - Предлагать вероятные root causes на основе evidence, contract terms, usage records, invoices и ledger entries.
+  - Формировать next actions для оператора: что проверить, у кого запросить данные, какие поля выглядят подозрительно.
+  - Отвечать на вопросы по кейсу в режиме "chat with case", используя только контекст из БД.
+- **Жесткие границы**:
+  - ИИ не считает `expected_revenue` и `actual_revenue`.
+  - ИИ не пишет в `expected_revenue_entries`, `actual_revenue_entries`, `reconciliation_runs`.
+  - ИИ не закрывает, не резолвит и не dismiss-ит кейсы автоматически.
+  - ИИ не создает root cause как факт; он создает suggestion, который должен подтвердить оператор.
+  - Каждый AI output должен ссылаться на evidence IDs, contract term IDs, invoice IDs или ledger entry IDs.
+  - Если данных недостаточно, ИИ должен явно вернуть "недостаточно данных", а не достраивать выводы.
+- **Архитектура**:
+  - `internal/app/ai`: use cases `GenerateCaseInsight`, `AskCaseQuestion`, `AcceptSuggestion`, `RejectSuggestion`.
+  - `internal/service/ai`: сбор контекста, prompt policy, schema validation, safety rules.
+  - `internal/platform/ai`: provider adapter для конкретной LLM.
+  - `internal/domain/leakage` хранит только подтвержденные оператором выводы, а не сырые AI догадки.
+- **Хранение**:
+  - Добавить таблицу `ai_insights`.
+  - Поля: `id`, `case_id`, `reconciliation_run_id`, `kind`, `status`, `model`, `prompt_version`, `input_hash`, `output_json`, `created_at`, `accepted_by`, `accepted_at`.
+  - `output_json` должен быть структурированным: summary, probable causes, evidence refs, next actions, confidence.
+- **Поток**:
+  - Reconciliation создает `leakage_case`.
+  - Outbox публикует `leakage.case.created.v1`.
+  - AI worker собирает case context из БД.
+  - LLM возвращает structured JSON по заранее заданной schema.
+  - UI показывает AI insight оператору.
+  - Оператор принимает, отклоняет или комментирует suggestion.
+- **Критерий готовности**:
+  - Для leakage case можно получить AI summary и next actions.
+  - Все AI ответы сохраняются с prompt version и input hash.
+  - В UI видно, какие выводы являются AI suggestion, а какие подтверждены оператором.
+
+---
