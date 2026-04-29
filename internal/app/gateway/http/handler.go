@@ -33,6 +33,10 @@ var ErrContractQueriesRequired = errors.New("contract queries are required")
 // command dependency.
 var ErrContractCommandsRequired = errors.New("contract commands are required")
 
+// ErrIngestionCommandsRequired reports that HTTP routes were created without an ingestion
+// command dependency.
+var ErrIngestionCommandsRequired = errors.New("ingestion commands are required")
+
 type reconciliationRunner interface {
 	RunRevenueLeakageCheck(
 		ctx context.Context,
@@ -64,11 +68,12 @@ type caseCommands interface {
 
 // Handler registers HTTP routes backed by application use cases.
 type Handler struct {
-	reconciliation   reconciliationRunner
-	cases            caseQueries
-	caseCommands     caseCommands
-	contractQueries  contractQueries
-	contractCommands contractCommands
+	reconciliation    reconciliationRunner
+	cases             caseQueries
+	caseCommands      caseCommands
+	contractQueries   contractQueries
+	contractCommands  contractCommands
+	ingestionCommands ingestionCommands
 }
 
 // NewHandler constructs the gateway HTTP handler set.
@@ -78,6 +83,7 @@ func NewHandler(
 	caseCommands caseCommands,
 	contractQueries contractQueries,
 	contractCommands contractCommands,
+	ingestionCommands ingestionCommands,
 ) (*Handler, error) {
 	if reconciliation == nil {
 		return nil, ErrReconciliationRunnerRequired
@@ -99,12 +105,17 @@ func NewHandler(
 		return nil, ErrContractCommandsRequired
 	}
 
+	if ingestionCommands == nil {
+		return nil, ErrIngestionCommandsRequired
+	}
+
 	return &Handler{
-		reconciliation:   reconciliation,
-		cases:            cases,
-		caseCommands:     caseCommands,
-		contractQueries:  contractQueries,
-		contractCommands: contractCommands,
+		reconciliation:    reconciliation,
+		cases:             cases,
+		caseCommands:      caseCommands,
+		contractQueries:   contractQueries,
+		contractCommands:  contractCommands,
+		ingestionCommands: ingestionCommands,
 	}, nil
 }
 
@@ -126,6 +137,10 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 		router.Post("/contracts/{contract_id}/terms", h.handleUpsertTerm)
 		router.Post("/contracts/billable-items", h.handleUpsertBillableItem)
 		router.Post("/contracts/terms", h.handleUpsertTermLegacy)
+
+		// Ingestion
+		router.Post("/ingest/usage", h.handleIngestUsage)
+		router.Post("/ingest/invoices", h.handleIngestInvoices)
 	})
 }
 

@@ -108,7 +108,7 @@ func TestHandlerListCases(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, caseQueries, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, caseQueries, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -166,7 +166,7 @@ func TestHandlerListCases(t *testing.T) {
 func TestHandlerListCasesBadRequest(t *testing.T) {
 	t.Parallel()
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -256,7 +256,7 @@ func TestHandlerGetCase(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, caseQueries, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, caseQueries, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -316,7 +316,7 @@ func TestHandlerGetCaseNotFound(t *testing.T) {
 
 	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{
 		caseErr: caseapp.ErrCaseNotFound,
-	}, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
+	}, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -364,7 +364,7 @@ func TestHandlerPatchCaseStatus(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -402,7 +402,7 @@ func TestHandlerPatchCaseStatus(t *testing.T) {
 func TestHandlerPatchCaseStatusRejectsResolved(t *testing.T) {
 	t.Parallel()
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, &recordingCaseCommands{}, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -451,7 +451,7 @@ func TestHandlerPatchCaseResolve(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -512,7 +512,7 @@ func TestHandlerPatchCaseDismiss(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -570,7 +570,7 @@ func TestHandlerPatchCaseAssignee(t *testing.T) {
 		},
 	}
 
-	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{})
+	handler, err := NewHandler(&noopReconciliationRunner{}, &recordingCaseQueries{}, caseCommands, &noopContractQueries{}, &noopContractCommands{}, &noopIngestionCommands{})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}

@@ -161,6 +161,7 @@ func newContractTestHandler(t *testing.T, commands *recordingContractCommands) *
 		&stubCaseCommands{},
 		&noopContractQueries{},
 		commands,
+		&noopIngestionCommands{},
 	)
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)

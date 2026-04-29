@@ -17,6 +17,7 @@ import (
 	contractapp "github.com/deplagene/revenueleakageengine/internal/app/contract"
 	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
+	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
 	"github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
@@ -24,6 +25,7 @@ import (
 	contractwork "github.com/deplagene/revenueleakageengine/internal/service/contract"
 	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
 	revenueservice "github.com/deplagene/revenueleakageengine/internal/service/revenue"
+
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
@@ -69,12 +71,18 @@ func run() error {
 		return err
 	}
 
+	ingestionCommands, err := buildIngestionUseCases(db)
+	if err != nil {
+		return err
+	}
+
 	httpHandler, err := gatewayhttp.NewHandler(
 		reconciliationWorkflow,
 		caseQueries,
 		caseCommands,
 		contractQueries,
 		contractCommands,
+		ingestionCommands,
 	)
 
 	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
@@ -236,4 +244,14 @@ func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Comma
 	commands := contractapp.NewCommands(contractService)
 
 	return queries, commands, nil
+}
+
+func buildIngestionUseCases(db *sql.DB) (*ingestionapp.Commands, error) {
+	store := ingestionapp.NewSQLiteStore(db)
+	commands, err := ingestionapp.NewCommands(store)
+	if err != nil {
+		return nil, fmt.Errorf("build ingestion commands: %w", err)
+	}
+
+	return commands, nil
 }

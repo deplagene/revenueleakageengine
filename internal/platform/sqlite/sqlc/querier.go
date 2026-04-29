@@ -13,12 +13,15 @@ type Querier interface {
 	CreateActualRevenueEntry(ctx context.Context, arg CreateActualRevenueEntryParams) error
 	CreateCaseStatusHistory(ctx context.Context, arg CreateCaseStatusHistoryParams) error
 	CreateExpectedRevenueEntry(ctx context.Context, arg CreateExpectedRevenueEntryParams) error
+	CreateInvoiceLine(ctx context.Context, arg CreateInvoiceLineParams) error
 	CreateLeakageCase(ctx context.Context, arg CreateLeakageCaseParams) error
 	CreateLeakageEvidence(ctx context.Context, arg CreateLeakageEvidenceParams) error
 	CreateReconciliationRun(ctx context.Context, arg CreateReconciliationRunParams) error
+	DeleteInvoiceLinesByInvoice(ctx context.Context, invoiceID string) error
 	GetBillableItem(ctx context.Context, id string) (BillableItem, error)
 	GetBillableItemByCode(ctx context.Context, arg GetBillableItemByCodeParams) (BillableItem, error)
 	GetContract(ctx context.Context, id string) (Contract, error)
+	GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoiceBySourceExternalParams) (Invoice, error)
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
 	ListActualRevenueByContractPeriod(ctx context.Context, arg ListActualRevenueByContractPeriodParams) ([]ActualRevenueEntry, error)
 	ListBillableItems(ctx context.Context, tenantID string) ([]BillableItem, error)
@@ -35,6 +38,8 @@ type Querier interface {
 	UpsertBillableItem(ctx context.Context, arg UpsertBillableItemParams) error
 	UpsertContract(ctx context.Context, arg UpsertContractParams) error
 	UpsertContractTerm(ctx context.Context, arg UpsertContractTermParams) error
+	UpsertInvoice(ctx context.Context, arg UpsertInvoiceParams) error
+	UpsertUsageRecord(ctx context.Context, arg UpsertUsageRecordParams) error
 }
 
 var _ Querier = (*Queries)(nil)
