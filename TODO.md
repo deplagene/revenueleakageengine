@@ -86,6 +86,9 @@
   - Cases list/detail: severity, status, evidence, root cause, assignee.
   - Case actions: investigate, resolve, dismiss, assign.
 - **Границы**:
+  - Это внутренний операторский/разработческий интерфейс, а не клиентский портал.
+  - На этом этапе допустимы технические поля вроде `tenant_id`, `contract_id` и ручной запуск сверки.
+  - Клиентский сценарий загрузки документов выносится в отдельный sprint, чтобы не смешивать UI консоли и intake pipeline.
   - View-компоненты не содержат money/reconciliation logic.
   - htmx не вызывает domain/service напрямую; только HTTP endpoints.
   - UI использует существующие app/service use cases.
@@ -137,13 +140,50 @@
 
 ---
 
-## Спринт 8: AI-assisted Revenue Investigation
+## Спринт 8: Document Intake & AI Extraction Pipeline
+
+**Цель:** Построить безопасный pipeline загрузки документов, в котором клиент или оператор загружает исходные файлы, ИИ извлекает структурированные факты, а core-сервис получает проверенный JSON для существующих use cases.
+
+- **Сценарий взаимодействия**:
+  - Клиент загружает договоры, счета, usage exports или billing exports через будущий client portal/API.
+  - Система сохраняет оригинальный документ как immutable source: `document_id`, `tenant_id`, `source_type`, `file_hash`, `uploaded_at`.
+  - AI/OCR/parser извлекает draft facts: contract terms, billable items, usage records, invoices.
+  - Результат сохраняется как structured JSON draft с confidence score и ссылками на evidence: page, row, field, document_id.
+  - JSON проходит schema validation, business validation и idempotency checks.
+  - Оператор подтверждает, правит или отклоняет draft.
+  - Только approved draft отправляется в существующие сервисы: `contract`, `ingestion`, `reconciliation`.
+- **JSON-контракты**:
+  - `contract_terms_draft`: условия договора, pricing model, effective period, currency, source refs.
+  - `usage_records_draft`: потребление за период, external id, quantity, unit, source refs.
+  - `invoices_draft`: выставленные суммы, invoice number, line items, billing period, source refs.
+  - Draft JSON не является domain entity; это transport/input model на boundary document intake.
+- **Архитектура**:
+  - `internal/app/document`: use cases `UploadDocument`, `ExtractDocumentFacts`, `ReviewExtraction`, `ApproveExtraction`, `RejectExtraction`.
+  - `internal/service/document`: validation policy, confidence policy, evidence mapping, duplicate detection.
+  - `internal/platform/ai`: provider adapter для LLM/OCR extraction.
+  - `internal/platform/storage`: локальное файловое хранилище для MVP, позже S3-compatible storage.
+  - Существующие сервисы остаются владельцами бизнес-данных; document intake только готовит проверенный вход.
+- **Границы**:
+  - ИИ не пишет напрямую в таблицы контрактов, usage, invoices, ledger или reconciliation.
+  - ИИ не принимает финансовые решения и не считает expected/actual revenue.
+  - Любой extracted fact должен иметь source reference на документ, страницу, строку или поле.
+  - При низкой уверенности draft требует ручного подтверждения.
+  - Оригинальные документы и extraction output версионируются для аудита.
+- **Критерий готовности**:
+  - Можно загрузить документ или экспорт и получить draft JSON по утвержденной schema.
+  - Draft можно подтвердить и отправить в существующие ingestion/contract use cases.
+  - В UI видно, какие поля извлечены ИИ, какие подтверждены оператором и откуда взят каждый факт.
+
+---
+
+## Спринт 9: AI-assisted Revenue Investigation
 
 **Цель:** Добавить ИИ-помощника для объяснения и расследования leakage cases без замены детерминированной финансовой логики.
 
 - **Роль ИИ**:
   - Объяснять уже найденный leakage case простым языком.
   - Предлагать вероятные root causes на основе evidence, contract terms, usage records, invoices и ledger entries.
+  - Использовать подтвержденные факты и source references из document intake pipeline, если кейс был создан на основе загруженных документов.
   - Формировать next actions для оператора: что проверить, у кого запросить данные, какие поля выглядят подозрительно.
   - Отвечать на вопросы по кейсу в режиме "chat with case", используя только контекст из БД.
 - **Жесткие границы**:
