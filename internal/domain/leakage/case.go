@@ -87,20 +87,21 @@ func (s Status) CanTransitionTo(next Status) bool {
 
 // Case is the primary investigation record created from a revenue mismatch.
 type Case struct {
-	ID                uuid.UUID
-	TenantID          uuid.UUID
-	CustomerID        uuid.UUID
-	ContractID        uuid.UUID
-	Type              CaseType
-	Severity          Severity
-	Status            Status
-	DetectedAt        time.Time
-	Period            valueobject.BillingPeriod
-	ExpectedAmount    valueobject.Money
-	ActualAmount      valueobject.Money
-	LeakageAmount     valueobject.Money
-	ConfidenceScore   valueobject.ConfidenceScore
-	RootCauseCategory Category
-	Assignee          string
-	TraceID           string
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	CustomerID          uuid.UUID
+	ContractID          uuid.UUID
+	ReconciliationRunID uuid.UUID
+	Type                CaseType
+	Severity            Severity
+	Status              Status
+	DetectedAt          time.Time
+	Period              valueobject.BillingPeriod
+	ExpectedAmount      valueobject.Money
+	ActualAmount        valueobject.Money
+	LeakageAmount       valueobject.Money
+	ConfidenceScore     valueobject.ConfidenceScore
+	RootCauseCategory   Category
+	Assignee            string
+	TraceID             string
 }

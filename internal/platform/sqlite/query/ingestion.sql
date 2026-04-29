@@ -99,3 +99,39 @@ INSERT INTO
   )
 VALUES
   (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: ListUsageRecordsForContractPeriod :many
+SELECT
+  *
+FROM
+  usage_records
+WHERE
+  tenant_id = ?
+  AND contract_id = ?
+  AND usage_time >= ?
+  AND usage_time < ?
+ORDER BY
+  usage_time ASC;
+
+-- name: ListInvoicesForContractPeriod :many
+SELECT
+  *
+FROM
+  invoices
+WHERE
+  tenant_id = ?
+  AND contract_id = ?
+  AND period_start = ?
+  AND period_end = ?
+ORDER BY
+  issued_at ASC;
+
+-- name: ListInvoiceLinesByInvoice :many
+SELECT
+  *
+FROM
+  invoice_lines
+WHERE
+  invoice_id = ?
+ORDER BY
+  created_at ASC;

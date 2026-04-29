@@ -56,22 +56,22 @@ func run() error {
 		return err
 	}
 
-	reconciliationWorkflow, err := buildReconciliationWorkflow(db)
-	if err != nil {
-		return err
-	}
-
-	caseQueries, caseCommands, err := buildCaseUseCases(db)
-	if err != nil {
-		return err
-	}
-
 	contractQueries, contractCommands, err := buildContractUseCases(db)
 	if err != nil {
 		return err
 	}
 
-	ingestionCommands, err := buildIngestionUseCases(db)
+	ingestionCommands, ingestionQueries, err := buildIngestionUseCases(db)
+	if err != nil {
+		return err
+	}
+
+	reconciliationWorkflow, err := buildReconciliationWorkflow(db, contractQueries, ingestionQueries)
+	if err != nil {
+		return err
+	}
+
+	caseQueries, caseCommands, err := buildCaseUseCases(db)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,11 @@ func newLogger(cfg config.LoggingConfig) *logging.Logger {
 	)
 }
 
-func buildReconciliationWorkflow(db *sql.DB) (*appreconciliation.RevenueLeakageWorkflow, error) {
+func buildReconciliationWorkflow(
+	db *sql.DB,
+	contractQueries appreconciliation.ContractQueries,
+	ingestionQueries appreconciliation.IngestionQueries,
+) (*appreconciliation.RevenueLeakageWorkflow, error) {
 	revenueStore := revenueservice.NewSQLiteStore(db)
 	revenueService := revenueservice.NewService(
 		revenueservice.WithStore(revenueStore),
@@ -113,6 +117,8 @@ func buildReconciliationWorkflow(db *sql.DB) (*appreconciliation.RevenueLeakageW
 	workflow, err := appreconciliation.NewRevenueLeakageWorkflow(
 		revenueService,
 		reconciliationService,
+		contractQueries,
+		ingestionQueries,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build reconciliation workflow: %w", err)
@@ -246,12 +252,17 @@ func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Comma
 	return queries, commands, nil
 }
 
-func buildIngestionUseCases(db *sql.DB) (*ingestionapp.Commands, error) {
+func buildIngestionUseCases(db *sql.DB) (*ingestionapp.Commands, *ingestionapp.Queries, error) {
 	store := ingestionapp.NewSQLiteStore(db)
 	commands, err := ingestionapp.NewCommands(store)
 	if err != nil {
-		return nil, fmt.Errorf("build ingestion commands: %w", err)
+		return nil, nil, fmt.Errorf("build ingestion commands: %w", err)
 	}
 
-	return commands, nil
+	queries, err := ingestionapp.NewQueries(store)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build ingestion queries: %w", err)
+	}
+
+	return commands, queries, nil
 }

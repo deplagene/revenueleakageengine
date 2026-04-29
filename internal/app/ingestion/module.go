@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
+	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
 	"github.com/google/uuid"
 )
 
@@ -117,4 +118,79 @@ func (c *Commands) IngestInvoice(ctx context.Context, invoice billing.Invoice, l
 	}
 
 	return nil
+}
+
+// Queries orchestrates data retrieval for ingestion facts.
+type Queries struct {
+	store Store
+}
+
+// ContractPeriodQuery identifies ingested facts for one contract and billing
+// period.
+type ContractPeriodQuery struct {
+	TenantID   uuid.UUID
+	ContractID uuid.UUID
+	Period     valueobject.BillingPeriod
+}
+
+// Validate checks that the query can safely address a contract period.
+func (q ContractPeriodQuery) Validate() error {
+	if q.TenantID == uuid.Nil {
+		return billing.ErrTenantRequired
+	}
+
+	if q.ContractID == uuid.Nil {
+		return billing.ErrContractRequired
+	}
+
+	if err := q.Period.Validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// NewQueries creates a new queries handler.
+func NewQueries(store Store) (*Queries, error) {
+	if store == nil {
+		return nil, ErrStoreRequired
+	}
+
+	return &Queries{
+		store: store,
+	}, nil
+}
+
+func (q *Queries) ListUsageRecordsForContractPeriod(
+	ctx context.Context,
+	query ContractPeriodQuery,
+) ([]billing.UsageRecord, error) {
+	const op = "app.ingestion.ListUsageRecordsForContractPeriod"
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := query.Validate(); err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return q.store.ListUsageRecordsForContractPeriod(ctx, query)
+}
+
+func (q *Queries) ListInvoicesForContractPeriod(
+	ctx context.Context,
+	query ContractPeriodQuery,
+) ([]billing.Invoice, []billing.InvoiceLine, error) {
+	const op = "app.ingestion.ListInvoicesForContractPeriod"
+
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	if err := query.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return q.store.ListInvoicesForContractPeriod(ctx, query)
 }

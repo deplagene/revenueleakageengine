@@ -54,6 +54,7 @@ INSERT INTO leakage_cases (
     tenant_id,
     customer_id,
     contract_id,
+    reconciliation_run_id,
     case_type,
     severity,
     status,
@@ -86,29 +87,31 @@ INSERT INTO leakage_cases (
     ?15,
     ?16,
     ?17,
-    ?18
+    ?18,
+    ?19
 )
 `
 
 type CreateLeakageCaseParams struct {
-	ID                         string `json:"id"`
-	TenantID                   string `json:"tenant_id"`
-	CustomerID                 string `json:"customer_id"`
-	ContractID                 string `json:"contract_id"`
-	CaseType                   string `json:"case_type"`
-	Severity                   string `json:"severity"`
-	Status                     string `json:"status"`
-	DetectedAt                 string `json:"detected_at"`
-	PeriodStart                string `json:"period_start"`
-	PeriodEnd                  string `json:"period_end"`
-	ExpectedAmountMinorUnits   int64  `json:"expected_amount_minor_units"`
-	ActualAmountMinorUnits     int64  `json:"actual_amount_minor_units"`
-	LeakageAmountMinorUnits    int64  `json:"leakage_amount_minor_units"`
-	Currency                   string `json:"currency"`
-	ConfidenceScoreBasisPoints int64  `json:"confidence_score_basis_points"`
-	RootCauseCategory          string `json:"root_cause_category"`
-	Assignee                   string `json:"assignee"`
-	TraceID                    string `json:"trace_id"`
+	ID                         string         `json:"id"`
+	TenantID                   string         `json:"tenant_id"`
+	CustomerID                 string         `json:"customer_id"`
+	ContractID                 string         `json:"contract_id"`
+	ReconciliationRunID        sql.NullString `json:"reconciliation_run_id"`
+	CaseType                   string         `json:"case_type"`
+	Severity                   string         `json:"severity"`
+	Status                     string         `json:"status"`
+	DetectedAt                 string         `json:"detected_at"`
+	PeriodStart                string         `json:"period_start"`
+	PeriodEnd                  string         `json:"period_end"`
+	ExpectedAmountMinorUnits   int64          `json:"expected_amount_minor_units"`
+	ActualAmountMinorUnits     int64          `json:"actual_amount_minor_units"`
+	LeakageAmountMinorUnits    int64          `json:"leakage_amount_minor_units"`
+	Currency                   string         `json:"currency"`
+	ConfidenceScoreBasisPoints int64          `json:"confidence_score_basis_points"`
+	RootCauseCategory          string         `json:"root_cause_category"`
+	Assignee                   string         `json:"assignee"`
+	TraceID                    string         `json:"trace_id"`
 }
 
 func (q *Queries) CreateLeakageCase(ctx context.Context, arg CreateLeakageCaseParams) error {
@@ -117,6 +120,7 @@ func (q *Queries) CreateLeakageCase(ctx context.Context, arg CreateLeakageCasePa
 		arg.TenantID,
 		arg.CustomerID,
 		arg.ContractID,
+		arg.ReconciliationRunID,
 		arg.CaseType,
 		arg.Severity,
 		arg.Status,

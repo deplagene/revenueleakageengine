@@ -122,6 +122,183 @@ func (q *Queries) GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoice
 	return i, err
 }
 
+const listInvoiceLinesByInvoice = `-- name: ListInvoiceLinesByInvoice :many
+SELECT
+  id, invoice_id, tenant_id, billable_item_id, description, quantity, unit_price_minor_units, discount_amount_minor_units, tax_amount_minor_units, line_total_minor_units, currency, source_ref, pricing_snapshot_json, created_at
+FROM
+  invoice_lines
+WHERE
+  invoice_id = ?
+ORDER BY
+  created_at ASC
+`
+
+func (q *Queries) ListInvoiceLinesByInvoice(ctx context.Context, invoiceID string) ([]InvoiceLine, error) {
+	rows, err := q.db.QueryContext(ctx, listInvoiceLinesByInvoice, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvoiceLine{}
+	for rows.Next() {
+		var i InvoiceLine
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvoiceID,
+			&i.TenantID,
+			&i.BillableItemID,
+			&i.Description,
+			&i.Quantity,
+			&i.UnitPriceMinorUnits,
+			&i.DiscountAmountMinorUnits,
+			&i.TaxAmountMinorUnits,
+			&i.LineTotalMinorUnits,
+			&i.Currency,
+			&i.SourceRef,
+			&i.PricingSnapshotJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvoicesForContractPeriod = `-- name: ListInvoicesForContractPeriod :many
+SELECT
+  id, tenant_id, customer_id, contract_id, external_id, invoice_number, period_start, period_end, issued_at, due_at, currency, total_amount_minor_units, status, source_system, created_at
+FROM
+  invoices
+WHERE
+  tenant_id = ?
+  AND contract_id = ?
+  AND period_start = ?
+  AND period_end = ?
+ORDER BY
+  issued_at ASC
+`
+
+type ListInvoicesForContractPeriodParams struct {
+	TenantID    string `json:"tenant_id"`
+	ContractID  string `json:"contract_id"`
+	PeriodStart string `json:"period_start"`
+	PeriodEnd   string `json:"period_end"`
+}
+
+func (q *Queries) ListInvoicesForContractPeriod(ctx context.Context, arg ListInvoicesForContractPeriodParams) ([]Invoice, error) {
+	rows, err := q.db.QueryContext(ctx, listInvoicesForContractPeriod,
+		arg.TenantID,
+		arg.ContractID,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Invoice{}
+	for rows.Next() {
+		var i Invoice
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.CustomerID,
+			&i.ContractID,
+			&i.ExternalID,
+			&i.InvoiceNumber,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.IssuedAt,
+			&i.DueAt,
+			&i.Currency,
+			&i.TotalAmountMinorUnits,
+			&i.Status,
+			&i.SourceSystem,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsageRecordsForContractPeriod = `-- name: ListUsageRecordsForContractPeriod :many
+SELECT
+  id, tenant_id, customer_id, contract_id, billable_item_id, external_id, usage_time, quantity, unit, source_system, trace_id, metadata_json, created_at
+FROM
+  usage_records
+WHERE
+  tenant_id = ?
+  AND contract_id = ?
+  AND usage_time >= ?
+  AND usage_time < ?
+ORDER BY
+  usage_time ASC
+`
+
+type ListUsageRecordsForContractPeriodParams struct {
+	TenantID    string `json:"tenant_id"`
+	ContractID  string `json:"contract_id"`
+	UsageTime   string `json:"usage_time"`
+	UsageTime_2 string `json:"usage_time_2"`
+}
+
+func (q *Queries) ListUsageRecordsForContractPeriod(ctx context.Context, arg ListUsageRecordsForContractPeriodParams) ([]UsageRecord, error) {
+	rows, err := q.db.QueryContext(ctx, listUsageRecordsForContractPeriod,
+		arg.TenantID,
+		arg.ContractID,
+		arg.UsageTime,
+		arg.UsageTime_2,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UsageRecord{}
+	for rows.Next() {
+		var i UsageRecord
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.CustomerID,
+			&i.ContractID,
+			&i.BillableItemID,
+			&i.ExternalID,
+			&i.UsageTime,
+			&i.Quantity,
+			&i.Unit,
+			&i.SourceSystem,
+			&i.TraceID,
+			&i.MetadataJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertInvoice = `-- name: UpsertInvoice :exec
 INSERT INTO
   invoices (

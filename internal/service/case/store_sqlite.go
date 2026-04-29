@@ -222,6 +222,11 @@ func leakageCaseFromRow(row sqlitedb.LeakageCase) (leakage.Case, error) {
 		return leakage.Case{}, fmt.Errorf("parse contract id: %w", err)
 	}
 
+	reconciliationRunID, err := parseNullableUUID("reconciliation run id", row.ReconciliationRunID)
+	if err != nil {
+		return leakage.Case{}, err
+	}
+
 	detectedAt, err := time.Parse(time.RFC3339Nano, row.DetectedAt)
 	if err != nil {
 		return leakage.Case{}, fmt.Errorf("parse detected at: %w", err)
@@ -261,22 +266,23 @@ func leakageCaseFromRow(row sqlitedb.LeakageCase) (leakage.Case, error) {
 	}
 
 	return leakage.Case{
-		ID:                id,
-		TenantID:          tenantID,
-		CustomerID:        customerID,
-		ContractID:        contractID,
-		Type:              leakage.CaseType(row.CaseType),
-		Severity:          leakage.Severity(row.Severity),
-		Status:            leakage.Status(row.Status),
-		DetectedAt:        detectedAt.UTC(),
-		Period:            period,
-		ExpectedAmount:    expectedAmount,
-		ActualAmount:      actualAmount,
-		LeakageAmount:     leakageAmount,
-		ConfidenceScore:   confidenceScore,
-		RootCauseCategory: leakage.Category(row.RootCauseCategory),
-		Assignee:          row.Assignee,
-		TraceID:           row.TraceID,
+		ID:                  id,
+		TenantID:            tenantID,
+		CustomerID:          customerID,
+		ContractID:          contractID,
+		ReconciliationRunID: reconciliationRunID,
+		Type:                leakage.CaseType(row.CaseType),
+		Severity:            leakage.Severity(row.Severity),
+		Status:              leakage.Status(row.Status),
+		DetectedAt:          detectedAt.UTC(),
+		Period:              period,
+		ExpectedAmount:      expectedAmount,
+		ActualAmount:        actualAmount,
+		LeakageAmount:       leakageAmount,
+		ConfidenceScore:     confidenceScore,
+		RootCauseCategory:   leakage.Category(row.RootCauseCategory),
+		Assignee:            row.Assignee,
+		TraceID:             row.TraceID,
 	}, nil
 }
 
@@ -401,6 +407,19 @@ func nullableString(value string) sql.NullString {
 		String: value,
 		Valid:  true,
 	}
+}
+
+func parseNullableUUID(field string, value sql.NullString) (uuid.UUID, error) {
+	if !value.Valid || value.String == "" {
+		return uuid.Nil, nil
+	}
+
+	parsed, err := uuid.Parse(value.String)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("parse %s: %w", field, err)
+	}
+
+	return parsed, nil
 }
 
 func billingPeriodFromStrings(start, end string) (valueobject.BillingPeriod, error) {

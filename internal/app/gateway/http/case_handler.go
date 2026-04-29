@@ -31,6 +31,7 @@ type caseResponse struct {
 	TenantID                   string `json:"tenant_id"`
 	CustomerID                 string `json:"customer_id"`
 	ContractID                 string `json:"contract_id"`
+	ReconciliationRunID        string `json:"reconciliation_run_id,omitempty"`
 	Type                       string `json:"type"`
 	Severity                   string `json:"severity"`
 	Status                     string `json:"status"`
@@ -433,6 +434,7 @@ func newCaseResponse(item leakage.Case) caseResponse {
 		TenantID:                   item.TenantID.String(),
 		CustomerID:                 item.CustomerID.String(),
 		ContractID:                 item.ContractID.String(),
+		ReconciliationRunID:        optionalUUIDString(item.ReconciliationRunID),
 		Type:                       string(item.Type),
 		Severity:                   string(item.Severity),
 		Status:                     string(item.Status),
@@ -448,6 +450,14 @@ func newCaseResponse(item leakage.Case) caseResponse {
 		Assignee:                   item.Assignee,
 		TraceID:                    item.TraceID,
 	}
+}
+
+func optionalUUIDString(value uuid.UUID) string {
+	if value == uuid.Nil {
+		return ""
+	}
+
+	return value.String()
 }
 
 func optionalUUID(field, raw string) (uuid.UUID, error) {
