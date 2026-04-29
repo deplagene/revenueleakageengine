@@ -17,7 +17,7 @@ func TestInvoiceActualRevenueBuilderBuildActualRevenue(t *testing.T) {
 	contractID := uuid.New()
 	billableItemID := uuid.New()
 	invoiceID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 	recognizedAt := mustTime(t, "2026-04-30T23:00:00Z")
 
 	builder := NewInvoiceActualRevenueBuilder()
@@ -62,7 +62,7 @@ func TestInvoiceActualRevenueBuilderRejectsUnmatchedInvoiceLine(t *testing.T) {
 	tenantID := uuid.New()
 	customerID := uuid.New()
 	contractID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 
 	builder := NewInvoiceActualRevenueBuilder()
 	_, err := builder.BuildActualRevenue(BuildActualRevenueCommand{
@@ -87,7 +87,7 @@ func TestInvoiceActualRevenueBuilderIgnoresDraftInvoices(t *testing.T) {
 	contractID := uuid.New()
 	billableItemID := uuid.New()
 	invoiceID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 
 	invoice := issuedInvoice(invoiceID, tenantID, customerID, contractID, period)
 	invoice.Status = billing.InvoiceStatusDraft

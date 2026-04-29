@@ -142,11 +142,7 @@ func (s *SQLiteStore) UpdateCaseStatus(
 	}
 
 	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	defer rollbackUncommitted(tx, &committed)
 
 	queries := s.queries.WithTx(tx)
 	updatedRows, err := queries.UpdateLeakageCaseStatus(ctx, sqlitedb.UpdateLeakageCaseStatusParams{
@@ -406,6 +402,16 @@ func nullableString(value string) sql.NullString {
 	return sql.NullString{
 		String: value,
 		Valid:  true,
+	}
+}
+
+func rollbackUncommitted(tx *sql.Tx, committed *bool) {
+	if *committed {
+		return
+	}
+
+	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		return
 	}
 }
 

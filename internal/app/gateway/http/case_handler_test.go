@@ -95,7 +95,7 @@ func TestHandlerListCases(t *testing.T) {
 					Severity:          leakage.SeverityHigh,
 					Status:            leakage.StatusOpen,
 					DetectedAt:        time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
-					Period:            mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+					Period:            mustBillingPeriod(t),
 					ExpectedAmount:    valueobject.MustMoney("USD", 5800),
 					ActualAmount:      valueobject.MustMoney("USD", 4640),
 					LeakageAmount:     valueobject.MustMoney("USD", 1160),
@@ -207,7 +207,7 @@ func TestHandlerGetCase(t *testing.T) {
 				Severity:          leakage.SeverityHigh,
 				Status:            leakage.StatusOpen,
 				DetectedAt:        time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
-				Period:            mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				Period:            mustBillingPeriod(t),
 				ExpectedAmount:    valueobject.MustMoney("USD", 5800),
 				ActualAmount:      valueobject.MustMoney("USD", 4640),
 				LeakageAmount:     valueobject.MustMoney("USD", 1160),
@@ -354,7 +354,7 @@ func TestHandlerPatchCaseStatus(t *testing.T) {
 				Severity:        leakage.SeverityHigh,
 				Status:          leakage.StatusInvestigating,
 				DetectedAt:      time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
-				Period:          mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				Period:          mustBillingPeriod(t),
 				ExpectedAmount:  valueobject.MustMoney("USD", 5800),
 				ActualAmount:    valueobject.MustMoney("USD", 4640),
 				LeakageAmount:   valueobject.MustMoney("USD", 1160),
@@ -441,7 +441,7 @@ func TestHandlerPatchCaseResolve(t *testing.T) {
 				Severity:        leakage.SeverityHigh,
 				Status:          leakage.StatusResolved,
 				DetectedAt:      time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
-				Period:          mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				Period:          mustBillingPeriod(t),
 				ExpectedAmount:  valueobject.MustMoney("USD", 5800),
 				ActualAmount:    valueobject.MustMoney("USD", 4640),
 				LeakageAmount:   valueobject.MustMoney("USD", 1160),
@@ -502,7 +502,7 @@ func TestHandlerPatchCaseDismiss(t *testing.T) {
 				Severity:        leakage.SeverityHigh,
 				Status:          leakage.StatusDismissed,
 				DetectedAt:      time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
-				Period:          mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				Period:          mustBillingPeriod(t),
 				ExpectedAmount:  valueobject.MustMoney("USD", 5800),
 				ActualAmount:    valueobject.MustMoney("USD", 4640),
 				LeakageAmount:   valueobject.MustMoney("USD", 1160),
@@ -559,7 +559,7 @@ func TestHandlerPatchCaseAssignee(t *testing.T) {
 				Severity:        leakage.SeverityHigh,
 				Status:          leakage.StatusOpen,
 				DetectedAt:      time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC),
-				Period:          mustBillingPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+				Period:          mustBillingPeriod(t),
 				ExpectedAmount:  valueobject.MustMoney("USD", 5800),
 				ActualAmount:    valueobject.MustMoney("USD", 4640),
 				LeakageAmount:   valueobject.MustMoney("USD", 1160),
@@ -605,15 +605,15 @@ func TestHandlerPatchCaseAssignee(t *testing.T) {
 	}
 }
 
-func mustBillingPeriod(t *testing.T, startRaw, endRaw string) valueobject.BillingPeriod {
+func mustBillingPeriod(t *testing.T) valueobject.BillingPeriod {
 	t.Helper()
 
-	start, err := time.Parse(time.RFC3339Nano, startRaw)
+	start, err := time.Parse(time.RFC3339Nano, "2026-04-01T00:00:00Z")
 	if err != nil {
 		t.Fatalf("parse start: %v", err)
 	}
 
-	end, err := time.Parse(time.RFC3339Nano, endRaw)
+	end, err := time.Parse(time.RFC3339Nano, "2026-05-01T00:00:00Z")
 	if err != nil {
 		t.Fatalf("parse end: %v", err)
 	}

@@ -307,7 +307,7 @@ func contractIDFromRoute(w http.ResponseWriter, r *http.Request) (uuid.UUID, boo
 	return contractID, true
 }
 
-func requiredUUID(field string, value string) (uuid.UUID, error) {
+func requiredUUID(field, value string) (uuid.UUID, error) {
 	id, err := parseUUID(field, value)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("invalid %s", field)
@@ -316,7 +316,7 @@ func requiredUUID(field string, value string) (uuid.UUID, error) {
 	return id, nil
 }
 
-func resolveTermContractID(routeContractID uuid.UUID, bodyContractID uuid.UUID) (uuid.UUID, error) {
+func resolveTermContractID(routeContractID, bodyContractID uuid.UUID) (uuid.UUID, error) {
 	if routeContractID != uuid.Nil {
 		if bodyContractID != uuid.Nil && bodyContractID != routeContractID {
 			return uuid.Nil, errors.New("contract_id does not match route")

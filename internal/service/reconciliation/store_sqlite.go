@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -147,11 +148,7 @@ func (s *SQLiteStore) CreateLeakageCase(ctx context.Context, c leakage.Case, evi
 	}
 
 	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	defer rollbackUncommitted(tx, &committed)
 
 	queries := s.queries.WithTx(tx)
 	if err := queries.CreateLeakageCase(ctx, sqlitedb.CreateLeakageCaseParams{
@@ -381,6 +378,16 @@ func nullableUUID(value uuid.UUID) sql.NullString {
 	return sql.NullString{
 		String: value.String(),
 		Valid:  true,
+	}
+}
+
+func rollbackUncommitted(tx *sql.Tx, committed *bool) {
+	if *committed {
+		return
+	}
+
+	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		return
 	}
 }
 

@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,7 +34,10 @@ func Open(ctx context.Context, dsn string) (*sql.DB, error) {
 	db.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%s:%w", op, errors.Join(err, closeErr))
+		}
+
 		return nil, fmt.Errorf("%s:%w", op, err)
 	}
 

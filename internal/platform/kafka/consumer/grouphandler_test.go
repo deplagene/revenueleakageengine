@@ -61,12 +61,11 @@ func TestGroupHandlerDoesNotMarkMessageOnFailure(t *testing.T) {
 }
 
 type fakeConsumerGroupSession struct {
-	ctx    context.Context
 	marked []*sarama.ConsumerMessage
 }
 
 func newFakeConsumerGroupSession() *fakeConsumerGroupSession {
-	return &fakeConsumerGroupSession{ctx: context.Background()}
+	return &fakeConsumerGroupSession{}
 }
 
 func (f *fakeConsumerGroupSession) Claims() map[string][]int32 {
@@ -92,7 +91,7 @@ func (f *fakeConsumerGroupSession) MarkMessage(msg *sarama.ConsumerMessage, meta
 }
 
 func (f *fakeConsumerGroupSession) Context() context.Context {
-	return f.ctx
+	return context.Background()
 }
 
 type fakeClaim struct {

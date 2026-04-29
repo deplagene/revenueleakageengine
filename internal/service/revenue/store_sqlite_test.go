@@ -19,7 +19,6 @@ import (
 func TestSQLiteStoreSaveExpectedRevenue(t *testing.T) {
 	ctx := context.Background()
 	db := openTestSQLite(t, ctx)
-	defer db.Close()
 
 	tenantID := uuid.New()
 	customerID := uuid.New()
@@ -36,7 +35,7 @@ func TestSQLiteStoreSaveExpectedRevenue(t *testing.T) {
 	)
 
 	store := NewSQLiteStore(db)
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 	entry := revenuedomain.ExpectedRevenueEntry{
 		ID:             uuid.New(),
 		TenantID:       tenantID,
@@ -83,7 +82,6 @@ func TestSQLiteStoreSaveExpectedRevenue(t *testing.T) {
 func TestSQLiteStoreSaveActualRevenue(t *testing.T) {
 	ctx := context.Background()
 	db := openTestSQLite(t, ctx)
-	defer db.Close()
 
 	tenantID := uuid.New()
 	customerID := uuid.New()
@@ -100,7 +98,7 @@ func TestSQLiteStoreSaveActualRevenue(t *testing.T) {
 	)
 
 	store := NewSQLiteStore(db)
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 	entry := revenuedomain.ActualRevenueEntry{
 		ID:             uuid.New(),
 		TenantID:       tenantID,
@@ -150,6 +148,11 @@ func openTestSQLite(t *testing.T, ctx context.Context) *sql.DB {
 	if err != nil {
 		t.Fatalf("sqlite.Open() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close sqlite: %v", err)
+		}
+	})
 
 	schema, err := os.ReadFile(sqliteSchemaPath(t))
 	if err != nil {
