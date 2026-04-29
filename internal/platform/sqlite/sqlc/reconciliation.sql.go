@@ -394,3 +394,78 @@ func (q *Queries) ListExpectedRevenueByContractPeriod(ctx context.Context, arg L
 	}
 	return items, nil
 }
+
+const listReconciliationRuns = `-- name: ListReconciliationRuns :many
+SELECT
+    id,
+    tenant_id,
+    contract_id,
+    period_start,
+    period_end,
+    status,
+    started_at,
+    completed_at,
+    expected_count,
+    actual_count,
+    diff_count,
+    case_count,
+    leakage_amount_minor_units,
+    currency,
+    trace_id
+FROM reconciliation_runs
+WHERE (?1 IS NULL OR tenant_id = ?1)
+  AND (?2 IS NULL OR contract_id = ?2)
+ORDER BY started_at DESC
+LIMIT ?4 OFFSET ?3
+`
+
+type ListReconciliationRunsParams struct {
+	TenantID    interface{} `json:"tenant_id"`
+	ContractID  interface{} `json:"contract_id"`
+	OffsetCount int64       `json:"offset_count"`
+	LimitCount  int64       `json:"limit_count"`
+}
+
+func (q *Queries) ListReconciliationRuns(ctx context.Context, arg ListReconciliationRunsParams) ([]ReconciliationRun, error) {
+	rows, err := q.db.QueryContext(ctx, listReconciliationRuns,
+		arg.TenantID,
+		arg.ContractID,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReconciliationRun{}
+	for rows.Next() {
+		var i ReconciliationRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ContractID,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.Status,
+			&i.StartedAt,
+			&i.CompletedAt,
+			&i.ExpectedCount,
+			&i.ActualCount,
+			&i.DiffCount,
+			&i.CaseCount,
+			&i.LeakageAmountMinorUnits,
+			&i.Currency,
+			&i.TraceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

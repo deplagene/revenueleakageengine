@@ -1,0 +1,179 @@
+package ui
+
+templ Header(active string) {
+	<header class="topbar">
+		<a class="brand" href="/ui">
+			<span class="brand-mark">RLE</span>
+			<span>
+				<strong>Revenue Leakage Engine</strong>
+				<small>операционный контроль выручки</small>
+			</span>
+		</a>
+		<nav class="nav">
+			<a class={ navClass(active, "dashboard") } href="/ui">Обзор</a>
+			<a class={ navClass(active, "reconciliation") } href="/ui/reconciliation">Запуск сверки</a>
+			<a class={ navClass(active, "cases") } href="/ui/cases">Кейсы</a>
+		</nav>
+	</header>
+}
+
+templ DashboardPage(data DashboardPageData) {
+	<!DOCTYPE html>
+	<html lang="ru">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title }</title>
+			<link rel="stylesheet" href="/ui/static/ui.css"/>
+			<script src="/ui/static/htmx.min.js" defer></script>
+		</head>
+		<body>
+			@Header("dashboard")
+			<main class="page">
+				<section class="hero">
+					<div>
+						<p class="eyebrow">Спринт 5 · Операционная консоль</p>
+						<h1>Сверка выручки без лишнего шума.</h1>
+						<p class="lede">Запускайте сверки, смотрите утечки и ведите расследование кейсов в одном server-rendered интерфейсе.</p>
+					</div>
+					<div class="hero-card">
+						<span>Текущий tenant</span>
+						if data.TenantID == "" {
+							<strong>не выбран</strong>
+						} else {
+							<strong>{ data.TenantID }</strong>
+						}
+					</div>
+				</section>
+				@ifError(data.Error)
+				<section class="metric-grid">
+					<article class="metric">
+						<span>Утечка в последних запусках</span>
+						<strong>{ data.TotalLeakageLabel }</strong>
+					</article>
+					<article class="metric">
+						<span>Загружено запусков</span>
+						<strong>{ data.CompletedRunsLabel }</strong>
+					</article>
+					<article class="metric">
+						<span>Открытые кейсы</span>
+						<strong>{ data.OpenCasesLabel }</strong>
+					</article>
+				</section>
+				<section class="split">
+					<div class="panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Действие</p>
+								<h2>Запустить сверку</h2>
+							</div>
+						</div>
+						@RunForm(data.RunForm)
+					</div>
+					<div class="panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">История</p>
+								<h2>Запуски сверки</h2>
+							</div>
+						</div>
+						@RunsTable(RunsTableData{Runs: data.Runs})
+					</div>
+				</section>
+				<section class="panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Очередь</p>
+							<h2>Кейсы утечек</h2>
+						</div>
+						<a class="button secondary" href="/ui/cases">Открыть кейсы</a>
+					</div>
+					@CasesTable(data.RecentCases)
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
+templ ReconciliationPage(data DashboardPageData) {
+	<!DOCTYPE html>
+	<html lang="ru">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title }</title>
+			<link rel="stylesheet" href="/ui/static/ui.css"/>
+			<script src="/ui/static/htmx.min.js" defer></script>
+		</head>
+		<body>
+			@Header("reconciliation")
+			<main class="page compact">
+				<section class="panel wide">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">По данным из БД</p>
+							<h1>Запуск сверки</h1>
+						</div>
+					</div>
+					@RunForm(data.RunForm)
+				</section>
+				<section class="panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">История</p>
+							<h2>Последние запуски</h2>
+						</div>
+					</div>
+					@RunsTable(RunsTableData{Runs: data.Runs})
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
+templ CasesPage(data CasesPageData) {
+	<!DOCTYPE html>
+	<html lang="ru">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title }</title>
+			<link rel="stylesheet" href="/ui/static/ui.css"/>
+			<script src="/ui/static/htmx.min.js" defer></script>
+		</head>
+		<body>
+			@Header("cases")
+			<main class="page compact">
+				<section class="panel wide">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Операционная очередь</p>
+							<h1>Кейсы утечек</h1>
+						</div>
+					</div>
+					@CaseFilters(data.Table)
+					@CasesTable(data.Table)
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
+templ CaseDetailPage(data CaseDetailPageData) {
+	<!DOCTYPE html>
+	<html lang="ru">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title }</title>
+			<link rel="stylesheet" href="/ui/static/ui.css"/>
+			<script src="/ui/static/htmx.min.js" defer></script>
+		</head>
+		<body>
+			@Header("cases")
+			<main class="page compact">
+				@CaseDetailPanel(data.Panel)
+			</main>
+		</body>
+	</html>
+}

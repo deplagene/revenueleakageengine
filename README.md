@@ -18,7 +18,6 @@ Revenue Leakage Engine объясняет разницу между ожидае
 - Go версии из `go.mod`.
 - Task CLI для выполнения команд из `Taskfile.yaml`.
 - SQLite CLI для ручного seed-сценария.
-- `goose`, если нужно вручную применять миграции через `task migrate-up`.
 
 Команды из `Taskfile.yaml` являются приоритетным способом работы с проектом:
 
@@ -28,11 +27,23 @@ task test-integration
 task build
 task run
 task sqlc-generate
+task ui-deps
+task templ-generate
+task templ-watch
 task migrate-up
 ```
 
 `task run` открывает SQLite базу `./local.db`, применяет миграции
 и поднимает HTTP API на `:8080`.
+Операционный server-rendered UI доступен на `http://localhost:8080/ui`.
+
+UI использует `templ` для HTML-компонентов и локальный `htmx` asset из
+`internal/app/gateway/http/static/htmx.min.js`. Зависимости UI ставятся через
+`task ui-deps`, генерация `*_templ.go` выполняется через `task templ-generate`.
+Для локальной разработки UI можно использовать `task templ-watch`; proxy будет
+доступен на `http://localhost:8081`, а приложение запускается через `task run`.
+Миграции выполняются через `task migrate-up`; Taskfile сам установит `goose` в
+`bin/goose`, если бинаря еще нет.
 
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 
@@ -43,6 +54,18 @@ go build ./...
 go run ./cmd/revenueleakageengine
 goose -dir internal/platform/sqlite/migrations sqlite3 ./local.db up
 ```
+
+## Операционный UI
+
+После `task run` откройте:
+
+- `GET /ui` — dashboard с последними reconciliation runs, агрегатом leakage и очередью open cases по tenant filter.
+- `GET /ui/reconciliation` — форма запуска database-driven reconciliation.
+- `GET /ui/cases?tenant_id=<uuid>` — список leakage cases с htmx-фильтрами.
+- `GET /ui/cases/{case_id}?tenant_id=<uuid>` — карточка кейса, evidence, root causes, status history и htmx-actions.
+
+UI handlers остаются тонким transport layer: формы мапятся в существующие app/service commands,
+а расчеты expected/actual revenue и lifecycle rules остаются в Go service/domain слоях.
 
 ## Money convention
 

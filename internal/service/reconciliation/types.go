@@ -25,6 +25,14 @@ var (
 	ErrContractRequired = errors.New("contract id is required")
 	// ErrCurrencyRequired reports that a reconciliation command has no currency.
 	ErrCurrencyRequired = errors.New("currency is required")
+	// ErrLimitInvalid reports that a read-model query has an unsupported page
+	// size.
+	ErrLimitInvalid = errors.New("limit must be between 1 and 100")
+)
+
+const (
+	defaultRunsLimit = 10
+	maxRunsLimit     = 100
 )
 
 // ReconcilePeriodCommand starts reconciliation for one tenant, contract, and
@@ -88,6 +96,59 @@ type ReconciliationRun struct {
 	CaseCount     int
 	LeakageAmount valueobject.Money
 	Currency      string
+	TraceID       string
+}
+
+// ListReconciliationRunsCommand requests a page of recent reconciliation runs.
+type ListReconciliationRunsCommand struct {
+	TenantID   uuid.UUID
+	ContractID uuid.UUID
+	Limit      int
+	Offset     int
+}
+
+// Normalize applies safe pagination defaults.
+func (c ListReconciliationRunsCommand) Normalize() ListReconciliationRunsCommand {
+	if c.Limit == 0 {
+		c.Limit = defaultRunsLimit
+	}
+
+	return c
+}
+
+// Validate checks read-model pagination bounds.
+func (c ListReconciliationRunsCommand) Validate() error {
+	if c.Limit < 1 || c.Limit > maxRunsLimit {
+		return ErrLimitInvalid
+	}
+
+	if c.Offset < 0 {
+		return ErrLimitInvalid
+	}
+
+	return nil
+}
+
+// ListReconciliationRunsResult contains one page of reconciliation run
+// summaries.
+type ListReconciliationRunsResult struct {
+	Runs []ReconciliationRunSummary
+}
+
+// ReconciliationRunSummary is the read model used by dashboards and lists.
+type ReconciliationRunSummary struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	ContractID    uuid.UUID
+	Period        valueobject.BillingPeriod
+	Status        ReconciliationRunStatus
+	StartedAt     time.Time
+	CompletedAt   time.Time
+	ExpectedCount int64
+	ActualCount   int64
+	DiffCount     int64
+	CaseCount     int64
+	LeakageAmount valueobject.Money
 	TraceID       string
 }
 

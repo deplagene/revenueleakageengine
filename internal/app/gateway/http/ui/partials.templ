@@ -1,0 +1,322 @@
+package ui
+
+templ RunForm(data RunFormData) {
+	<form class="form-grid" hx-post="/ui/reconciliation/run" hx-target="#run-result" hx-swap="innerHTML">
+		<label>
+			<span>Tenant ID</span>
+			<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
+		</label>
+		<label>
+			<span>ID контракта</span>
+			<input name="contract_id" value={ data.ContractID } placeholder="uuid контракта" required/>
+		</label>
+		<label>
+			<span>Начало периода</span>
+			<input name="period_start" value={ data.PeriodStart } placeholder="2026-04-01T00:00:00Z" required/>
+		</label>
+		<label>
+			<span>Конец периода</span>
+			<input name="period_end" value={ data.PeriodEnd } placeholder="2026-05-01T00:00:00Z" required/>
+		</label>
+		<label>
+			<span>Валюта</span>
+			<input name="currency" value={ data.Currency } placeholder="USD" required/>
+		</label>
+		<label>
+			<span>Минимальная утечка, minor units</span>
+			<input name="minimum_leakage_minor_units" value={ data.MinimumLeakageMinorUnits } inputmode="numeric" placeholder="0"/>
+		</label>
+		<label class="span-2">
+			<span>Trace ID</span>
+			<input name="trace_id" value={ data.TraceID } placeholder="ui-run-001"/>
+		</label>
+		<div class="form-actions span-2">
+			<button class="button" type="submit">Запустить сверку по данным БД</button>
+		</div>
+	</form>
+	<div id="run-result" class="result-slot">
+		@ifError(data.Error)
+	</div>
+}
+
+templ RunResult(data RunResultData) {
+	<div class="run-result success">
+		@ifError(data.Error)
+		if data.Error == "" {
+			<div>
+				<p class="eyebrow">Сверка завершена</p>
+				<h3>{ data.RunID }</h3>
+			</div>
+			<div class="metric-grid compact-grid">
+				<article class="metric">
+					<span>Утечка</span>
+					<strong>{ data.LeakageLabel }</strong>
+				</article>
+				<article class="metric">
+					<span>Фактических записей</span>
+					<strong>{ data.ActualCount }</strong>
+				</article>
+				<article class="metric">
+					<span>Расхождений</span>
+					<strong>{ data.DiffCount }</strong>
+				</article>
+				<article class="metric">
+					<span>Кейсов</span>
+					<strong>{ data.CaseCount }</strong>
+				</article>
+			</div>
+			if len(data.Cases) > 0 {
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Кейс</th>
+								<th>Статус</th>
+								<th>Утечка</th>
+								<th>Уверенность</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, item := range data.Cases {
+								<tr>
+									<td><a href={ item.DetailPath }>{ item.ID }</a></td>
+									<td><span class={ item.StatusClass }>{ item.Status }</span></td>
+									<td>{ item.LeakageLabel }</td>
+									<td>{ item.ConfidenceLabel }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		}
+	</div>
+}
+
+templ RunsTable(data RunsTableData) {
+	if len(data.Runs) == 0 {
+		<div class="empty">Запусков сверки пока нет.</div>
+	} else {
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th>Запуск</th>
+						<th>Контракт</th>
+						<th>Период</th>
+						<th>Статус</th>
+						<th>Утечка</th>
+						<th>Кейсы</th>
+						<th>Старт</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, run := range data.Runs {
+						<tr>
+							<td>
+								<strong>{ run.ID }</strong>
+								if run.TraceID != "" {
+									<small>{ run.TraceID }</small>
+								}
+							</td>
+							<td>{ run.ContractID }</td>
+							<td>{ run.PeriodLabel }</td>
+							<td><span class={ run.StatusClass }>{ run.Status }</span></td>
+							<td>{ run.LeakageLabel }</td>
+							<td>{ run.Cases }</td>
+							<td>{ run.StartedAt }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ CaseFilters(data CasesTableData) {
+	<form class="filter-bar" hx-get="/ui/cases" hx-target="#cases-table" hx-swap="outerHTML" hx-push-url="true">
+		<label>
+			<span>Tenant ID</span>
+			<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
+		</label>
+		<label>
+			<span>ID контракта</span>
+			<input name="contract_id" value={ data.ContractID } placeholder="необязательно"/>
+		</label>
+		<label>
+			<span>Статус</span>
+			<select name="status">
+				<option value="">Любой статус</option>
+				<option value="open" selected?={ data.Status == "open" }>Открыт</option>
+				<option value="investigating" selected?={ data.Status == "investigating" }>В работе</option>
+				<option value="resolved" selected?={ data.Status == "resolved" }>Решён</option>
+				<option value="dismissed" selected?={ data.Status == "dismissed" }>Отклонён</option>
+			</select>
+		</label>
+		<button class="button secondary" type="submit">Применить фильтр</button>
+	</form>
+}
+
+templ CasesTable(data CasesTableData) {
+	<div id="cases-table">
+		@ifError(data.Error)
+		if data.Error == "" && len(data.Cases) == 0 {
+			<div class="empty">{ data.EmptyMessage }</div>
+		}
+		if len(data.Cases) > 0 {
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Кейс</th>
+							<th>Важность</th>
+							<th>Статус</th>
+							<th>Причина</th>
+							<th>Утечка</th>
+							<th>Ответственный</th>
+							<th>Обнаружен</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, item := range data.Cases {
+							<tr>
+								<td>
+									<a href={ item.DetailPath }>{ item.ID }</a>
+									<small>{ item.Type }</small>
+								</td>
+								<td>{ item.Severity }</td>
+								<td><span class={ item.StatusClass }>{ item.Status }</span></td>
+								<td>{ item.RootCause }</td>
+								<td>{ item.LeakageLabel }</td>
+								<td>{ item.Assignee }</td>
+								<td>{ item.DetectedAt }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+templ CaseDetailPanel(data CaseDetailPanelData) {
+	<section id="case-detail" class="case-detail">
+		@ifError(data.Error)
+		if data.Error == "" {
+			<div class="panel wide">
+				<div class="panel-heading">
+					<div>
+						<p class="eyebrow">Кейс утечки</p>
+						<h1>{ data.Case.ID }</h1>
+						<p class="lede">{ data.Case.Type } · { data.Case.PeriodLabel }</p>
+					</div>
+					<span class={ data.Case.StatusClass }>{ data.Case.Status }</span>
+				</div>
+				<div class="metric-grid compact-grid">
+					<article class="metric">
+						<span>Ожидалось</span>
+						<strong>{ data.Case.ExpectedLabel }</strong>
+					</article>
+					<article class="metric">
+						<span>Факт</span>
+						<strong>{ data.Case.ActualLabel }</strong>
+					</article>
+					<article class="metric danger">
+						<span>Утечка</span>
+						<strong>{ data.Case.LeakageLabel }</strong>
+					</article>
+					<article class="metric">
+						<span>Уверенность</span>
+						<strong>{ data.Case.ConfidenceLabel }</strong>
+					</article>
+				</div>
+				<div class="split tight">
+					<form class="panel inset" hx-post={ "/ui/cases/" + data.Case.ID + "/status" } hx-target="#case-detail" hx-swap="outerHTML">
+						<h2>Жизненный цикл</h2>
+						<input type="hidden" name="tenant_id" value={ data.TenantID }/>
+						<label>
+							<span>Статус</span>
+							<select name="status">
+								for _, option := range data.StatusOptions {
+									if option.Selected {
+										<option value={ option.Value } selected>{ option.Label }</option>
+									} else {
+										<option value={ option.Value }>{ option.Label }</option>
+									}
+								}
+							</select>
+						</label>
+						<label>
+							<span>Кто изменил</span>
+							<input name="changed_by" value="billing-ops"/>
+						</label>
+						<label>
+							<span>Код причины</span>
+							<input name="reason_code" placeholder="invoice_corrected"/>
+						</label>
+						<label>
+							<span>Комментарий</span>
+							<textarea name="comment" rows="3" placeholder="Контекст решения"></textarea>
+						</label>
+						<button class="button" type="submit">Обновить статус</button>
+					</form>
+					<form class="panel inset" hx-post={ "/ui/cases/" + data.Case.ID + "/assignee" } hx-target="#case-detail" hx-swap="outerHTML">
+						<h2>Ответственный</h2>
+						<input type="hidden" name="tenant_id" value={ data.TenantID }/>
+						<label>
+							<span>Исполнитель</span>
+							<input name="assignee" value={ data.Case.Assignee } placeholder="billing-ops"/>
+						</label>
+						<button class="button secondary" type="submit">Назначить</button>
+					</form>
+				</div>
+			</div>
+			<section class="split">
+				<div class="panel">
+					<h2>Доказательства</h2>
+					if len(data.Evidence) == 0 {
+						<div class="empty">Доказательств пока нет.</div>
+					} else {
+						for _, item := range data.Evidence {
+							<article class="evidence-card">
+								<strong>{ item.Type }</strong>
+								<span>{ item.EntityType } · { item.EntityID }</span>
+								<pre>{ item.Payload }</pre>
+							</article>
+						}
+					}
+				</div>
+				<div class="panel">
+					<h2>Причины и история</h2>
+					if len(data.RootCauses) == 0 {
+						<div class="empty">Подтверждённых причин пока нет.</div>
+					} else {
+						for _, item := range data.RootCauses {
+							<article class="timeline-card">
+								<strong>{ item.Category }</strong>
+								<p>{ item.Description }</p>
+								<small>{ item.ConfidenceLabel } · { item.DerivedBy }</small>
+							</article>
+						}
+					}
+					if len(data.History) > 0 {
+						<h3>История статусов</h3>
+						for _, item := range data.History {
+							<article class="timeline-card">
+								<strong>{ item.FromStatus } -> { item.ToStatus }</strong>
+								<p>{ item.ReasonCode } { item.Comment }</p>
+								<small>{ item.ChangedAt } · { item.ChangedBy }</small>
+							</article>
+						}
+					}
+				</div>
+			</section>
+		}
+	</section>
+}
+
+templ ifError(message string) {
+	if message != "" {
+		<div class="alert">{ message }</div>
+	}
+}

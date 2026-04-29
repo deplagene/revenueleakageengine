@@ -31,6 +31,34 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 	}
 }
 
+// ListReconciliationRuns loads recent reconciliation run summaries.
+func (s *SQLiteStore) ListReconciliationRuns(
+	ctx context.Context,
+	cmd ListReconciliationRunsCommand,
+) ([]ReconciliationRunSummary, error) {
+	rows, err := s.queries.ListReconciliationRuns(ctx, sqlitedb.ListReconciliationRunsParams{
+		TenantID:    nullableUUIDInterface(cmd.TenantID),
+		ContractID:  nullableUUIDInterface(cmd.ContractID),
+		LimitCount:  int64(cmd.Limit),
+		OffsetCount: int64(cmd.Offset),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list reconciliation runs: %w", err)
+	}
+
+	runs := make([]ReconciliationRunSummary, 0, len(rows))
+	for _, row := range rows {
+		run, err := reconciliationRunSummaryFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+
+		runs = append(runs, run)
+	}
+
+	return runs, nil
+}
+
 // CreateReconciliationRun stores the initial run record before matching starts.
 func (s *SQLiteStore) CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error {
 	currency := run.Currency
@@ -379,6 +407,70 @@ func nullableUUID(value uuid.UUID) sql.NullString {
 		String: value.String(),
 		Valid:  true,
 	}
+}
+
+func nullableUUIDInterface(value uuid.UUID) any {
+	if value == uuid.Nil {
+		return nil
+	}
+
+	return value.String()
+}
+
+func reconciliationRunSummaryFromRow(row sqlitedb.ReconciliationRun) (ReconciliationRunSummary, error) {
+	id, err := parseStoredUUID("reconciliation run id", row.ID)
+	if err != nil {
+		return ReconciliationRunSummary{}, err
+	}
+
+	tenantID, err := parseStoredUUID("tenant id", row.TenantID)
+	if err != nil {
+		return ReconciliationRunSummary{}, err
+	}
+
+	contractID, err := parseStoredUUID("contract id", row.ContractID)
+	if err != nil {
+		return ReconciliationRunSummary{}, err
+	}
+
+	period, err := billingPeriodFromStoredValues(row.PeriodStart, row.PeriodEnd)
+	if err != nil {
+		return ReconciliationRunSummary{}, err
+	}
+
+	startedAt, err := parseStoredTime("started at", row.StartedAt)
+	if err != nil {
+		return ReconciliationRunSummary{}, err
+	}
+
+	var completedAt time.Time
+	if row.CompletedAt.Valid && row.CompletedAt.String != "" {
+		completedAt, err = parseStoredTime("completed at", row.CompletedAt.String)
+		if err != nil {
+			return ReconciliationRunSummary{}, err
+		}
+	}
+
+	leakageAmount, err := valueobject.NewMoney(row.Currency, row.LeakageAmountMinorUnits)
+	if err != nil {
+		return ReconciliationRunSummary{}, fmt.Errorf("build leakage amount: %w", err)
+	}
+
+	return ReconciliationRunSummary{
+		ID:            id,
+		TenantID:      tenantID,
+		ContractID:    contractID,
+		Period:        period,
+		Status:        ReconciliationRunStatus(row.Status),
+		StartedAt:     startedAt.UTC(),
+		CompletedAt:   completedAt.UTC(),
+		ExpectedCount: row.ExpectedCount,
+		ActualCount:   row.ActualCount,
+		DiffCount:     row.DiffCount,
+		CaseCount:     row.CaseCount,
+		LeakageAmount: leakageAmount,
+		TraceID:       row.TraceID,
+	}, nil
 }
 
 func rollbackUncommitted(tx *sql.Tx, committed *bool) {

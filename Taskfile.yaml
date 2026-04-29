@@ -7,6 +7,9 @@ vars:
   GOFUMPT_VERSION: "v0.9.2"
   SQLC_VERSION: "v1.31.0"
   SWAG_VERSION: "v1.16.4"
+  TEMPL_VERSION: "v0.3.1001"
+  HTMX_VERSION: "2.0.7"
+  GOOSE_VERSION: "v3.27.0"
 
   DB_PATH: "./local.db"
 
@@ -16,6 +19,9 @@ vars:
   GOFUMPT: "{{.BIN_DIR}}/gofumpt"
   SQLC: "{{.BIN_DIR}}/sqlc"
   SWAG: "{{.BIN_DIR}}/swag"
+  TEMPL: "{{.BIN_DIR}}/templ"
+  GOOSE: "{{.BIN_DIR}}/goose"
+  HTMX: "{{.ROOT_DIR}}/internal/app/gateway/http/static/htmx.min.js"
 
 tasks:
   install-formatters:
@@ -36,8 +42,11 @@ tasks:
 
   format:
     desc: "Форматирует весь проект gofumpt + gci"
-    deps: [install-formatters]
+    deps: [install-formatters, install-templ]
     cmds:
+      - |
+        echo "🧩 Форматируем templ ..."
+        {{.TEMPL}} fmt .
       - |
         echo "🧼 Форматируем через gofumpt ..."
         find . -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GOFUMPT}} -extra -w {} +
@@ -111,8 +120,68 @@ tasks:
     cmds:
       - "{{.SWAG}} init -g cmd/revenueleakageengine/main.go -o docs --parseInternal"
 
+  install-goose:
+    desc: "Устанавливает goose в каталог bin"
+    cmds:
+      - |
+        [ -f {{.GOOSE}} ] || {
+          mkdir -p {{.BIN_DIR}} .cache/go-build
+          echo "📦 Устанавливаем goose {{.GOOSE_VERSION}}..."
+          GOCACHE={{.ROOT_DIR}}/.cache/go-build GOBIN={{.BIN_DIR}} go install github.com/pressly/goose/v3/cmd/goose@{{.GOOSE_VERSION}}
+        }
+    status:
+      - test -x {{.GOOSE}}
+
+  install-templ:
+    desc: "Устанавливает templ CLI в каталог bin"
+    cmds:
+      - |
+        [ -f {{.TEMPL}} ] || {
+          mkdir -p {{.BIN_DIR}}
+          echo "📦 Устанавливаем templ {{.TEMPL_VERSION}}..."
+          GOBIN={{.BIN_DIR}} go install github.com/a-h/templ/cmd/templ@{{.TEMPL_VERSION}}
+        }
+    status:
+      - test -x {{.TEMPL}}
+
+  install-htmx:
+    desc: "Скачивает локальный htmx asset для server-rendered UI"
+    cmds:
+      - |
+        [ -f {{.HTMX}} ] || {
+          mkdir -p {{.ROOT_DIR}}/internal/app/gateway/http/static
+          echo "📦 Скачиваем htmx {{.HTMX_VERSION}}..."
+          curl -fsSL https://unpkg.com/htmx.org@{{.HTMX_VERSION}}/dist/htmx.min.js -o {{.HTMX}}
+        }
+    status:
+      - test -s {{.HTMX}}
+
+  ui-deps:
+    desc: "Устанавливает зависимости Sprint 5 UI: templ runtime, templ CLI и htmx asset"
+    deps: [install-templ, install-htmx]
+    cmds:
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go get github.com/a-h/templ@{{.TEMPL_VERSION}}
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go mod tidy
+
+  templ-generate:
+    desc: "Генерирует Go-код из .templ компонентов"
+    deps: [install-templ]
+    cmds:
+      - "{{.TEMPL}} generate -include-timestamp=false -include-version=false"
+
+  templ-watch:
+    desc: "Запускает templ watch с proxy/live reload для локального UI"
+    deps: [install-templ]
+    cmds:
+      - "{{.TEMPL}} generate -watch -include-timestamp=false -include-version=false -proxy=http://localhost:8080 -proxyport=8081 -open-browser=false -cmd='task run'"
+
   test:
     desc: "Запускает go test для всего проекта"
+    deps: [templ-generate]
     cmds:
       - |
         mkdir -p .cache/go-build
@@ -130,6 +199,7 @@ tasks:
 
   test-coverage:
     desc: "Запускает go test с покрытием и сохраняет профиль"
+    deps: [templ-generate]
     cmds:
       - |
         mkdir -p .cache/go-build .cache/coverage
@@ -137,6 +207,7 @@ tasks:
 
   build:
     desc: "Собирает все Go пакеты проекта"
+    deps: [templ-generate]
     cmds:
       - |
         mkdir -p .cache/go-build
@@ -151,5 +222,6 @@ tasks:
 
   migrate-up:
     desc: "Применяет SQLite миграции к локальной базе"
+    deps: [install-goose]
     cmds:
-      - goose -dir internal/platform/sqlite/migrations sqlite3 {{.DB_PATH}} up
+      - "{{.GOOSE}} -dir internal/platform/sqlite/migrations sqlite3 {{.DB_PATH}} up"

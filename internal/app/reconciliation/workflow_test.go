@@ -352,6 +352,17 @@ func (s *workflowStore) ListActualRevenue(
 	return result, nil
 }
 
+func (s *workflowStore) ListReconciliationRuns(
+	ctx context.Context,
+	cmd reconciliationservice.ListReconciliationRunsCommand,
+) ([]reconciliationservice.ReconciliationRunSummary, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 func (s *workflowStore) CreateReconciliationRun(
 	ctx context.Context,
 	run reconciliationservice.ReconciliationRun,
