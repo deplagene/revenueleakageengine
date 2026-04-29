@@ -25,5 +25,7 @@ type Store interface {
 		contractID uuid.UUID,
 		period valueobject.BillingPeriod,
 	) ([]revenue.ActualRevenueEntry, error)
+	CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error
+	CompleteReconciliationRun(ctx context.Context, run ReconciliationRun) error
 	CreateLeakageCase(ctx context.Context, c leakage.Case, evidence []leakage.Evidence) error
 }

@@ -10,6 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// ReconciliationRunStatus captures the persisted lifecycle of one run.
+type ReconciliationRunStatus string
+
+const (
+	ReconciliationRunStatusRunning   ReconciliationRunStatus = "running"
+	ReconciliationRunStatusCompleted ReconciliationRunStatus = "completed"
+)
+
 var (
 	// ErrTenantRequired reports that a reconciliation command has no tenant.
 	ErrTenantRequired = errors.New("tenant id is required")
@@ -62,6 +70,25 @@ type ReconcilePeriodResult struct {
 	CaseCount     int
 	LeakageAmount valueobject.Money
 	Cases         []leakage.Case
+}
+
+// ReconciliationRun stores the persisted execution statistics for one
+// reconciliation pass.
+type ReconciliationRun struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	ContractID    uuid.UUID
+	Period        valueobject.BillingPeriod
+	Status        ReconciliationRunStatus
+	StartedAt     time.Time
+	CompletedAt   time.Time
+	ExpectedCount int
+	ActualCount   int
+	DiffCount     int
+	CaseCount     int
+	LeakageAmount valueobject.Money
+	Currency      string
+	TraceID       string
 }
 
 // MatchKey identifies the reconciliation unit used to compare expected and

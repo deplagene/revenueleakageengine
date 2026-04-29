@@ -30,9 +30,12 @@ type Querier interface {
 	ListContractsByCustomer(ctx context.Context, arg ListContractsByCustomerParams) ([]Contract, error)
 	ListEffectiveContractTerms(ctx context.Context, arg ListEffectiveContractTermsParams) ([]ContractTerm, error)
 	ListExpectedRevenueByContractPeriod(ctx context.Context, arg ListExpectedRevenueByContractPeriodParams) ([]ExpectedRevenueEntry, error)
+	ListInvoiceLinesByInvoice(ctx context.Context, invoiceID string) ([]InvoiceLine, error)
+	ListInvoicesForContractPeriod(ctx context.Context, arg ListInvoicesForContractPeriodParams) ([]Invoice, error)
 	ListLeakageCases(ctx context.Context, arg ListLeakageCasesParams) ([]LeakageCase, error)
 	ListLeakageEvidenceByCase(ctx context.Context, caseID string) ([]LeakageEvidence, error)
 	ListRootCausesByCase(ctx context.Context, caseID string) ([]RootCause, error)
+	ListUsageRecordsForContractPeriod(ctx context.Context, arg ListUsageRecordsForContractPeriodParams) ([]UsageRecord, error)
 	UpdateLeakageCaseAssignee(ctx context.Context, arg UpdateLeakageCaseAssigneeParams) (int64, error)
 	UpdateLeakageCaseStatus(ctx context.Context, arg UpdateLeakageCaseStatusParams) (int64, error)
 	UpsertBillableItem(ctx context.Context, arg UpsertBillableItemParams) error

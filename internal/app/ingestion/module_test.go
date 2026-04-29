@@ -147,6 +147,20 @@ func (s *recordingStore) UpsertInvoice(
 	return nil
 }
 
+func (s *recordingStore) ListUsageRecordsForContractPeriod(
+	ctx context.Context,
+	query ContractPeriodQuery,
+) ([]billing.UsageRecord, error) {
+	return nil, nil
+}
+
+func (s *recordingStore) ListInvoicesForContractPeriod(
+	ctx context.Context,
+	query ContractPeriodQuery,
+) ([]billing.Invoice, []billing.InvoiceLine, error) {
+	return nil, nil, nil
+}
+
 func validUsageRecord() billing.UsageRecord {
 	return billing.UsageRecord{
 		ID:             uuid.MustParse("11111111-1111-1111-1111-111111111111"),

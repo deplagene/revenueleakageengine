@@ -3,10 +3,13 @@ package reconciliation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
+	contractdomain "github.com/deplagene/revenueleakageengine/internal/domain/contract"
 	"github.com/deplagene/revenueleakageengine/internal/domain/leakage"
 	revenuedomain "github.com/deplagene/revenueleakageengine/internal/domain/revenue"
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
@@ -40,11 +43,6 @@ func TestRevenueLeakageWorkflowRunRevenueLeakageCheck(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
-	workflow, err := NewRevenueLeakageWorkflow(revenueService, reconciliationService)
-	if err != nil {
-		t.Fatalf("NewRevenueLeakageWorkflow() error = %v", err)
-	}
-
 	tenantID := uuid.New()
 	customerID := uuid.New()
 	contractID := uuid.New()
@@ -52,37 +50,62 @@ func TestRevenueLeakageWorkflowRunRevenueLeakageCheck(t *testing.T) {
 	invoiceID := uuid.New()
 	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
 
-	result, err := workflow.RunRevenueLeakageCheck(ctx, RunRevenueLeakageCheckCommand{
-		Expected: revenueservice.CalculateExpectedRevenueCommand{
-			TenantID:       tenantID,
-			CustomerID:     customerID,
-			ContractID:     contractID,
-			BillableItemID: billableItemID,
-			Period:         period,
-			Pricing: revenueservice.FixedUsagePricing{
-				BaseFee:          valueobject.MustMoney("USD", 500_000),
-				IncludedQuantity: 100_000,
-				OverageUnitPrice: valueobject.MustMoney("USD", 1),
-				Unit:             "events",
-			},
-			UsageRecords: []billing.UsageRecord{
-				usageRecord(tenantID, customerID, contractID, billableItemID, 180_000, "2026-04-10T00:00:00Z"),
-			},
-			Version: 1,
-		},
-		Actual: revenueservice.BuildActualRevenueCommand{
+	contractQueries := &workflowContractQueries{
+		contractDoc: &contractdomain.Contract{
+			ID:         contractID,
 			TenantID:   tenantID,
 			CustomerID: customerID,
-			ContractID: contractID,
-			Period:     period,
-			Invoices: []billing.Invoice{
-				issuedInvoice(invoiceID, tenantID, customerID, contractID, period),
-			},
-			InvoiceLines: []billing.InvoiceLine{
-				invoiceLine(invoiceID, billableItemID, valueobject.MustMoney("USD", 464_000)),
-			},
+			Currency:   "USD",
 		},
-		TraceID: "business-trace-1",
+		terms: []*contractdomain.Term{
+			pricingTerm(contractdomain.TermTypeFixedFee, map[string]any{
+				"code":               "platform_subscription",
+				"amount_minor_units": float64(500_000),
+				"currency":           "USD",
+			}),
+			pricingTerm(contractdomain.TermTypeUsageRate, map[string]any{
+				"code":                   "platform_subscription",
+				"unit_price_minor_units": float64(1),
+				"included_quantity":      float64(100_000),
+				"unit":                   "events",
+				"currency":               "USD",
+			}),
+		},
+		billableItem: &contractdomain.BillableItem{
+			ID:       billableItemID,
+			TenantID: tenantID,
+			Code:     "platform_subscription",
+			Unit:     "events",
+		},
+	}
+	ingestionQueries := &workflowIngestionQueries{
+		usageRecords: []billing.UsageRecord{
+			usageRecord(tenantID, customerID, contractID, billableItemID, 180_000, period.Start),
+		},
+		invoices: []billing.Invoice{
+			issuedInvoice(invoiceID, tenantID, customerID, contractID, period),
+		},
+		invoiceLines: []billing.InvoiceLine{
+			invoiceLine(invoiceID, billableItemID, valueobject.MustMoney("USD", 464_000)),
+		},
+	}
+
+	workflow, err := NewRevenueLeakageWorkflow(
+		revenueService,
+		reconciliationService,
+		contractQueries,
+		ingestionQueries,
+	)
+	if err != nil {
+		t.Fatalf("NewRevenueLeakageWorkflow() error = %v", err)
+	}
+
+	result, err := workflow.RunRevenueLeakageCheck(ctx, RunRevenueLeakageCheckCommand{
+		TenantID:    tenantID,
+		ContractID:  contractID,
+		PeriodStart: period.Start,
+		PeriodEnd:   period.End,
+		TraceID:     "business-trace-1",
 	})
 	if err != nil {
 		t.Fatalf("RunRevenueLeakageCheck() error = %v", err)
@@ -114,6 +137,22 @@ func TestRevenueLeakageWorkflowRunRevenueLeakageCheck(t *testing.T) {
 	if store.cases[0].Type != leakage.CaseTypeUnderbilling {
 		t.Fatalf("case type = %q, want underbilling", store.cases[0].Type)
 	}
+
+	if store.cases[0].ReconciliationRunID != result.ReconciliationResult.RunID {
+		t.Fatalf(
+			"case reconciliation run id = %s, want %s",
+			store.cases[0].ReconciliationRunID,
+			result.ReconciliationResult.RunID,
+		)
+	}
+
+	if len(store.completedRuns) != 1 {
+		t.Fatalf("completed run count = %d, want 1", len(store.completedRuns))
+	}
+
+	if store.completedRuns[0].CaseCount != 1 {
+		t.Fatalf("completed run case count = %d, want 1", store.completedRuns[0].CaseCount)
+	}
 }
 
 func TestRevenueLeakageWorkflowRejectsScopeMismatch(t *testing.T) {
@@ -127,39 +166,120 @@ func TestRevenueLeakageWorkflowRejectsScopeMismatch(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 
+	tenantID := uuid.New()
+	contractID := uuid.New()
+	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
 	workflow, err := NewRevenueLeakageWorkflow(
 		revenueservice.NewService(revenueservice.WithStore(store)),
 		reconciliationService,
+		&workflowContractQueries{
+			contractDoc: &contractdomain.Contract{
+				ID:         contractID,
+				TenantID:   uuid.New(),
+				CustomerID: uuid.New(),
+				Currency:   "USD",
+			},
+		},
+		&workflowIngestionQueries{},
 	)
 	if err != nil {
 		t.Fatalf("NewRevenueLeakageWorkflow() error = %v", err)
 	}
 
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
 	_, err = workflow.RunRevenueLeakageCheck(context.Background(), RunRevenueLeakageCheckCommand{
-		Expected: revenueservice.CalculateExpectedRevenueCommand{
-			TenantID:       uuid.New(),
-			CustomerID:     uuid.New(),
-			ContractID:     uuid.New(),
-			BillableItemID: uuid.New(),
-			Period:         period,
-		},
-		Actual: revenueservice.BuildActualRevenueCommand{
-			TenantID:   uuid.New(),
-			CustomerID: uuid.New(),
-			ContractID: uuid.New(),
-			Period:     period,
-		},
+		TenantID:    tenantID,
+		ContractID:  contractID,
+		PeriodStart: period.Start,
+		PeriodEnd:   period.End,
 	})
 	if !errors.Is(err, ErrWorkflowScopeMismatch) {
 		t.Fatalf("error = %v, want %v", err, ErrWorkflowScopeMismatch)
 	}
 }
 
+type workflowContractQueries struct {
+	contractDoc  *contractdomain.Contract
+	terms        []*contractdomain.Term
+	billableItem *contractdomain.BillableItem
+}
+
+func (q *workflowContractQueries) GetContract(
+	ctx context.Context,
+	id uuid.UUID,
+) (*contractdomain.Contract, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if q.contractDoc == nil || q.contractDoc.ID != id {
+		return nil, fmt.Errorf("contract %s not found", id)
+	}
+
+	return q.contractDoc, nil
+}
+
+func (q *workflowContractQueries) GetEffectiveTerms(
+	ctx context.Context,
+	contractID uuid.UUID,
+	at time.Time,
+) ([]*contractdomain.Term, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	return q.terms, nil
+}
+
+func (q *workflowContractQueries) GetBillableItemByCode(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	code string,
+) (*contractdomain.BillableItem, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if q.billableItem == nil || q.billableItem.TenantID != tenantID || q.billableItem.Code != code {
+		return nil, fmt.Errorf("billable item %q not found", code)
+	}
+
+	return q.billableItem, nil
+}
+
+type workflowIngestionQueries struct {
+	usageRecords []billing.UsageRecord
+	invoices     []billing.Invoice
+	invoiceLines []billing.InvoiceLine
+}
+
+func (q *workflowIngestionQueries) ListUsageRecordsForContractPeriod(
+	ctx context.Context,
+	query ingestionapp.ContractPeriodQuery,
+) ([]billing.UsageRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	return q.usageRecords, nil
+}
+
+func (q *workflowIngestionQueries) ListInvoicesForContractPeriod(
+	ctx context.Context,
+	query ingestionapp.ContractPeriodQuery,
+) ([]billing.Invoice, []billing.InvoiceLine, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	return q.invoices, q.invoiceLines, nil
+}
+
 type workflowStore struct {
-	expected []revenuedomain.ExpectedRevenueEntry
-	actual   []revenuedomain.ActualRevenueEntry
-	cases    []leakage.Case
+	expected      []revenuedomain.ExpectedRevenueEntry
+	actual        []revenuedomain.ActualRevenueEntry
+	cases         []leakage.Case
+	runs          []reconciliationservice.ReconciliationRun
+	completedRuns []reconciliationservice.ReconciliationRun
 }
 
 func (s *workflowStore) SaveExpectedRevenue(
@@ -232,6 +352,30 @@ func (s *workflowStore) ListActualRevenue(
 	return result, nil
 }
 
+func (s *workflowStore) CreateReconciliationRun(
+	ctx context.Context,
+	run reconciliationservice.ReconciliationRun,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.runs = append(s.runs, run)
+	return nil
+}
+
+func (s *workflowStore) CompleteReconciliationRun(
+	ctx context.Context,
+	run reconciliationservice.ReconciliationRun,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.completedRuns = append(s.completedRuns, run)
+	return nil
+}
+
 func (s *workflowStore) CreateLeakageCase(
 	ctx context.Context,
 	c leakage.Case,
@@ -243,6 +387,17 @@ func (s *workflowStore) CreateLeakageCase(
 
 	s.cases = append(s.cases, c)
 	return nil
+}
+
+func pricingTerm(
+	termType contractdomain.TermType,
+	expression map[string]any,
+) *contractdomain.Term {
+	return &contractdomain.Term{
+		ID:         uuid.New(),
+		Type:       termType,
+		Expression: expression,
+	}
 }
 
 func issuedInvoice(
@@ -282,7 +437,7 @@ func usageRecord(
 	contractID uuid.UUID,
 	billableItemID uuid.UUID,
 	quantity int64,
-	usageTime string,
+	usageTime time.Time,
 ) billing.UsageRecord {
 	return billing.UsageRecord{
 		ID:             uuid.New(),
@@ -290,7 +445,7 @@ func usageRecord(
 		CustomerID:     customerID,
 		ContractID:     contractID,
 		BillableItemID: billableItemID,
-		UsageTime:      mustTimeNoT(usageTime),
+		UsageTime:      usageTime,
 		Quantity:       quantity,
 		Unit:           "events",
 	}
@@ -313,15 +468,6 @@ func mustTime(t *testing.T, value string) time.Time {
 	parsed, err := time.Parse(time.RFC3339, value)
 	if err != nil {
 		t.Fatalf("time.Parse(%q) error = %v", value, err)
-	}
-
-	return parsed
-}
-
-func mustTimeNoT(value string) time.Time {
-	parsed, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		panic(err)
 	}
 
 	return parsed

@@ -45,6 +45,10 @@ func (q *Queries) GetContract(ctx context.Context, id uuid.UUID) (*contract.Cont
 	return q.service.GetContract(ctx, id)
 }
 
+func (q *Queries) GetBillableItemByCode(ctx context.Context, tenantID uuid.UUID, code string) (*contract.BillableItem, error) {
+	return q.service.GetBillableItemByCode(ctx, tenantID, code)
+}
+
 func (q *Queries) ListContractsByCustomer(ctx context.Context, tenantID, customerID uuid.UUID) ([]*contract.Contract, error) {
 	return q.service.ListContractsByCustomer(ctx, tenantID, customerID)
 }

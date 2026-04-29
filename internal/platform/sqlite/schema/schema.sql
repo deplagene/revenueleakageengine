@@ -296,6 +296,7 @@ CREATE TABLE leakage_cases (
     tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     customer_id TEXT NOT NULL REFERENCES customer_accounts(id) ON DELETE RESTRICT,
     contract_id TEXT NOT NULL REFERENCES contracts(id) ON DELETE RESTRICT,
+    reconciliation_run_id TEXT REFERENCES reconciliation_runs(id) ON DELETE SET NULL,
     case_type TEXT NOT NULL,
     severity TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -314,6 +315,9 @@ CREATE TABLE leakage_cases (
 
 CREATE INDEX leakage_cases_contract_period_idx
     ON leakage_cases(tenant_id, contract_id, period_start, period_end);
+
+CREATE INDEX leakage_cases_reconciliation_run_idx
+    ON leakage_cases(reconciliation_run_id);
 
 CREATE INDEX leakage_cases_status_severity_idx
     ON leakage_cases(tenant_id, status, severity);

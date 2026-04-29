@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	contractdomain "github.com/deplagene/revenueleakageengine/internal/domain/contract"
@@ -119,6 +120,35 @@ func (s *Service) GetBillableItem(ctx context.Context, id uuid.UUID) (*contractd
 	}
 
 	item, err := s.store.GetBillableItem(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return item, nil
+}
+
+// GetBillableItemByCode returns a billable item by its code.
+func (s *Service) GetBillableItemByCode(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	code string,
+) (*contractdomain.BillableItem, error) {
+	const op = "service.contract.GetBillableItemByCode"
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if tenantID == uuid.Nil {
+		return nil, fmt.Errorf("%s: %w", op, contractdomain.ErrTenantRequired)
+	}
+
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, fmt.Errorf("%s: %w", op, contractdomain.ErrBillableItemCodeRequired)
+	}
+
+	item, err := s.store.GetBillableItemByCode(ctx, tenantID, code)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}

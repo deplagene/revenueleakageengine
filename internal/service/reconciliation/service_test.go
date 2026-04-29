@@ -82,8 +82,20 @@ func TestServiceReconcilePeriodCreatesUnderbillingCase(t *testing.T) {
 		t.Fatalf("unexpected case type: %s", store.createdCases[0].Type)
 	}
 
+	if store.createdCases[0].ReconciliationRunID != result.RunID {
+		t.Fatalf(
+			"case reconciliation run id = %s, want %s",
+			store.createdCases[0].ReconciliationRunID,
+			result.RunID,
+		)
+	}
+
 	if len(store.createdEvidence) != 1 {
 		t.Fatalf("expected 1 evidence record, got %d", len(store.createdEvidence))
+	}
+
+	if len(store.completedRuns) != 1 {
+		t.Fatalf("expected 1 completed run, got %d", len(store.completedRuns))
 	}
 }
 
@@ -138,6 +150,8 @@ func TestServiceReconcilePeriodCreatesUnbilledUsageCase(t *testing.T) {
 type fakeStore struct {
 	expected        []revenue.ExpectedRevenueEntry
 	actual          []revenue.ActualRevenueEntry
+	createdRuns     []ReconciliationRun
+	completedRuns   []ReconciliationRun
 	createdCases    []leakage.Case
 	createdEvidence []leakage.Evidence
 }
@@ -158,6 +172,16 @@ func (f *fakeStore) ListActualRevenue(
 	period valueobject.BillingPeriod,
 ) ([]revenue.ActualRevenueEntry, error) {
 	return f.actual, nil
+}
+
+func (f *fakeStore) CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error {
+	f.createdRuns = append(f.createdRuns, run)
+	return nil
+}
+
+func (f *fakeStore) CompleteReconciliationRun(ctx context.Context, run ReconciliationRun) error {
+	f.completedRuns = append(f.completedRuns, run)
+	return nil
 }
 
 func (f *fakeStore) CreateLeakageCase(

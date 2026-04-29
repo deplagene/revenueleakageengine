@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
+	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
 	sqlitedb "github.com/deplagene/revenueleakageengine/internal/platform/sqlite/sqlc"
 	"github.com/google/uuid"
 )
@@ -193,6 +194,306 @@ func nullableStoredTime(value time.Time) sql.NullString {
 		String: formatStoredTime(value),
 		Valid:  true,
 	}
+}
+
+func (s *SQLiteStore) ListUsageRecordsForContractPeriod(
+	ctx context.Context,
+	query ContractPeriodQuery,
+) ([]billing.UsageRecord, error) {
+	if err := query.Validate(); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.queries.ListUsageRecordsForContractPeriod(ctx, sqlitedb.ListUsageRecordsForContractPeriodParams{
+		TenantID:    query.TenantID.String(),
+		ContractID:  query.ContractID.String(),
+		UsageTime:   formatStoredTime(query.Period.Start),
+		UsageTime_2: formatStoredTime(query.Period.End),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list usage records: %w", err)
+	}
+
+	records := make([]billing.UsageRecord, 0, len(rows))
+	for index, row := range rows {
+		id, err := parseStoredUUID("usage record id", row.ID)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		tenantID, err := parseStoredUUID("usage tenant id", row.TenantID)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		customerID, err := parseStoredUUID("usage customer id", row.CustomerID)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		contractID, err := parseStoredUUID("usage contract id", row.ContractID)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		billableItemID, err := parseStoredUUID("usage billable item id", row.BillableItemID)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		usageTime, err := parseStoredTime("usage time", row.UsageTime)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		metadata, err := decodeJSONMap("usage metadata", row.MetadataJson)
+		if err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		record := billing.UsageRecord{
+			ID:             id,
+			TenantID:       tenantID,
+			CustomerID:     customerID,
+			ContractID:     contractID,
+			BillableItemID: billableItemID,
+			ExternalID:     row.ExternalID,
+			UsageTime:      usageTime,
+			Quantity:       row.Quantity,
+			Unit:           row.Unit,
+			SourceSystem:   row.SourceSystem,
+			TraceID:        row.TraceID,
+			Metadata:       metadata,
+		}.Normalize()
+		if err := record.Validate(); err != nil {
+			return nil, fmt.Errorf("usage row[%d]: %w", index, err)
+		}
+
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
+func (s *SQLiteStore) ListInvoicesForContractPeriod(
+	ctx context.Context,
+	query ContractPeriodQuery,
+) ([]billing.Invoice, []billing.InvoiceLine, error) {
+	if err := query.Validate(); err != nil {
+		return nil, nil, err
+	}
+
+	rows, err := s.queries.ListInvoicesForContractPeriod(ctx, sqlitedb.ListInvoicesForContractPeriodParams{
+		TenantID:    query.TenantID.String(),
+		ContractID:  query.ContractID.String(),
+		PeriodStart: formatStoredTime(query.Period.Start),
+		PeriodEnd:   formatStoredTime(query.Period.End),
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("list invoices: %w", err)
+	}
+
+	invoices := make([]billing.Invoice, 0, len(rows))
+	allLines := make([]billing.InvoiceLine, 0)
+
+	for index, row := range rows {
+		id, err := parseStoredUUID("invoice id", row.ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		tenantID, err := parseStoredUUID("invoice tenant id", row.TenantID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		customerID, err := parseStoredUUID("invoice customer id", row.CustomerID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		contractID, err := parseStoredUUID("invoice contract id", row.ContractID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		periodStart, err := parseStoredTime("invoice period start", row.PeriodStart)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		periodEnd, err := parseStoredTime("invoice period end", row.PeriodEnd)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		issuedAt, err := parseStoredTime("invoice issued_at", row.IssuedAt)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		dueAt, err := parseNullableStoredTime("invoice due_at", row.DueAt)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		period, err := valueobject.NewBillingPeriod(periodStart, periodEnd)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: build period: %w", index, err)
+		}
+
+		amount, err := valueobject.NewMoney(row.Currency, row.TotalAmountMinorUnits)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: build total amount: %w", index, err)
+		}
+
+		invoice := billing.Invoice{
+			ID:           id,
+			TenantID:     tenantID,
+			CustomerID:   customerID,
+			ContractID:   contractID,
+			ExternalID:   row.ExternalID,
+			Number:       row.InvoiceNumber,
+			Period:       period,
+			IssuedAt:     issuedAt,
+			DueAt:        dueAt,
+			TotalAmount:  amount,
+			Status:       billing.InvoiceStatus(row.Status),
+			SourceSystem: row.SourceSystem,
+		}.Normalize()
+		if err := invoice.Validate(); err != nil {
+			return nil, nil, fmt.Errorf("invoice row[%d]: %w", index, err)
+		}
+
+		invoices = append(invoices, invoice)
+
+		lineRows, err := s.queries.ListInvoiceLinesByInvoice(ctx, row.ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("list invoice %s lines: %w", id, err)
+		}
+
+		for lineIndex, lineRow := range lineRows {
+			line, err := invoiceLineFromRow(lineRow, id, invoice.TotalAmount.Currency)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invoice row[%d] line[%d]: %w", index, lineIndex, err)
+			}
+
+			allLines = append(allLines, line)
+		}
+	}
+
+	return invoices, allLines, nil
+}
+
+func invoiceLineFromRow(
+	row sqlitedb.InvoiceLine,
+	invoiceID uuid.UUID,
+	invoiceCurrency string,
+) (billing.InvoiceLine, error) {
+	lineID, err := parseStoredUUID("invoice line id", row.ID)
+	if err != nil {
+		return billing.InvoiceLine{}, err
+	}
+
+	billableItemID, err := parseNullableStoredUUID("invoice line billable item id", row.BillableItemID)
+	if err != nil {
+		return billing.InvoiceLine{}, err
+	}
+
+	unitPrice, err := valueobject.NewMoney(row.Currency, row.UnitPriceMinorUnits)
+	if err != nil {
+		return billing.InvoiceLine{}, fmt.Errorf("build unit price: %w", err)
+	}
+
+	discountAmount, err := valueobject.NewMoney(row.Currency, row.DiscountAmountMinorUnits)
+	if err != nil {
+		return billing.InvoiceLine{}, fmt.Errorf("build discount amount: %w", err)
+	}
+
+	taxAmount, err := valueobject.NewMoney(row.Currency, row.TaxAmountMinorUnits)
+	if err != nil {
+		return billing.InvoiceLine{}, fmt.Errorf("build tax amount: %w", err)
+	}
+
+	lineTotal, err := valueobject.NewMoney(row.Currency, row.LineTotalMinorUnits)
+	if err != nil {
+		return billing.InvoiceLine{}, fmt.Errorf("build line total: %w", err)
+	}
+
+	pricingSnapshot, err := decodeJSONMap("invoice line pricing snapshot", row.PricingSnapshotJson)
+	if err != nil {
+		return billing.InvoiceLine{}, err
+	}
+
+	line := billing.InvoiceLine{
+		ID:              lineID,
+		InvoiceID:       invoiceID,
+		BillableItemID:  billableItemID,
+		Description:     row.Description,
+		Quantity:        row.Quantity,
+		UnitPrice:       unitPrice,
+		DiscountAmount:  discountAmount,
+		TaxAmount:       taxAmount,
+		LineTotal:       lineTotal,
+		SourceRef:       row.SourceRef,
+		PricingSnapshot: pricingSnapshot,
+	}.Normalize(invoiceID)
+	if err := line.Validate(invoiceCurrency); err != nil {
+		return billing.InvoiceLine{}, err
+	}
+
+	return line, nil
+}
+
+func parseStoredUUID(field, value string) (uuid.UUID, error) {
+	parsed, err := uuid.Parse(value)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("parse %s: %w", field, err)
+	}
+
+	return parsed, nil
+}
+
+func parseNullableStoredUUID(field string, value sql.NullString) (uuid.UUID, error) {
+	if !value.Valid || value.String == "" {
+		return uuid.Nil, nil
+	}
+
+	return parseStoredUUID(field, value.String)
+}
+
+func parseStoredTime(field, value string) (time.Time, error) {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse %s: %w", field, err)
+	}
+
+	return parsed.UTC(), nil
+}
+
+func parseNullableStoredTime(field string, value sql.NullString) (time.Time, error) {
+	if !value.Valid || value.String == "" {
+		return time.Time{}, nil
+	}
+
+	return parseStoredTime(field, value.String)
+}
+
+func decodeJSONMap(field, value string) (map[string]any, error) {
+	if value == "" {
+		return map[string]any{}, nil
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(value), &decoded); err != nil {
+		return nil, fmt.Errorf("decode %s json: %w", field, err)
+	}
+
+	if decoded == nil {
+		return map[string]any{}, nil
+	}
+
+	return decoded, nil
 }
 
 func nullableUUID(value uuid.UUID) sql.NullString {

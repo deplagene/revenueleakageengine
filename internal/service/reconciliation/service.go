@@ -100,6 +100,25 @@ func (s *Service) ReconcilePeriod(
 		return ReconcilePeriodResult{}, fmt.Errorf("%s: %w", op, err)
 	}
 
+	if cmd.RunID == uuid.Nil {
+		cmd.RunID = uuid.New()
+	}
+
+	startedAt := s.now().UTC()
+	if err := s.store.CreateReconciliationRun(ctx, ReconciliationRun{
+		ID:            cmd.RunID,
+		TenantID:      cmd.TenantID,
+		ContractID:    cmd.ContractID,
+		Period:        cmd.Period,
+		Status:        ReconciliationRunStatusRunning,
+		StartedAt:     startedAt,
+		LeakageAmount: valueobject.ZeroMoney(cmd.Currency),
+		Currency:      cmd.Currency,
+		TraceID:       cmd.TraceID,
+	}); err != nil {
+		return ReconcilePeriodResult{}, fmt.Errorf("%s: create reconciliation run: %w", op, err)
+	}
+
 	expected, err := s.store.ListExpectedRevenue(
 		ctx,
 		cmd.TenantID,
@@ -151,6 +170,7 @@ func (s *Service) ReconcilePeriod(
 
 	for _, candidate := range candidates {
 		c := candidate.ToCase(s.now())
+		c.ReconciliationRunID = cmd.RunID
 		evidence := s.evidenceBuilder.Build(c, candidate, s.now)
 
 		if err := s.store.CreateLeakageCase(ctx, c, evidence); err != nil {
@@ -172,6 +192,19 @@ func (s *Service) ReconcilePeriod(
 
 	if result.LeakageAmount.Currency == "" {
 		result.LeakageAmount = valueobject.ZeroMoney(cmd.Currency)
+	}
+
+	if err := s.store.CompleteReconciliationRun(ctx, ReconciliationRun{
+		ID:            cmd.RunID,
+		Status:        ReconciliationRunStatusCompleted,
+		CompletedAt:   s.now().UTC(),
+		ExpectedCount: result.ExpectedCount,
+		ActualCount:   result.ActualCount,
+		DiffCount:     result.DiffCount,
+		CaseCount:     result.CaseCount,
+		LeakageAmount: result.LeakageAmount,
+	}); err != nil {
+		return ReconcilePeriodResult{}, fmt.Errorf("%s: complete reconciliation run: %w", op, err)
 	}
 
 	return result, nil

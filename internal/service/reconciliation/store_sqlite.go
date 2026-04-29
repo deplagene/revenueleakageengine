@@ -30,6 +30,53 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 	}
 }
 
+// CreateReconciliationRun stores the initial run record before matching starts.
+func (s *SQLiteStore) CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error {
+	currency := run.Currency
+	if currency == "" {
+		currency = run.LeakageAmount.Currency
+	}
+
+	if err := s.queries.CreateReconciliationRun(ctx, sqlitedb.CreateReconciliationRunParams{
+		ID:                      run.ID.String(),
+		TenantID:                run.TenantID.String(),
+		ContractID:              run.ContractID.String(),
+		PeriodStart:             formatStoredTime(run.Period.Start),
+		PeriodEnd:               formatStoredTime(run.Period.End),
+		Status:                  string(run.Status),
+		StartedAt:               formatStoredTime(run.StartedAt),
+		ExpectedCount:           int64(run.ExpectedCount),
+		ActualCount:             int64(run.ActualCount),
+		DiffCount:               int64(run.DiffCount),
+		CaseCount:               int64(run.CaseCount),
+		LeakageAmountMinorUnits: run.LeakageAmount.MinorUnits,
+		Currency:                currency,
+		TraceID:                 run.TraceID,
+	}); err != nil {
+		return fmt.Errorf("create reconciliation run: %w", err)
+	}
+
+	return nil
+}
+
+// CompleteReconciliationRun updates the run with final matching statistics.
+func (s *SQLiteStore) CompleteReconciliationRun(ctx context.Context, run ReconciliationRun) error {
+	if err := s.queries.CompleteReconciliationRun(ctx, sqlitedb.CompleteReconciliationRunParams{
+		ID:                      run.ID.String(),
+		Status:                  string(run.Status),
+		CompletedAt:             nullableStoredTime(run.CompletedAt),
+		ExpectedCount:           int64(run.ExpectedCount),
+		ActualCount:             int64(run.ActualCount),
+		DiffCount:               int64(run.DiffCount),
+		CaseCount:               int64(run.CaseCount),
+		LeakageAmountMinorUnits: run.LeakageAmount.MinorUnits,
+	}); err != nil {
+		return fmt.Errorf("complete reconciliation run: %w", err)
+	}
+
+	return nil
+}
+
 // ListExpectedRevenue loads expected revenue entries for one contract and
 // billing period.
 func (s *SQLiteStore) ListExpectedRevenue(
@@ -112,6 +159,7 @@ func (s *SQLiteStore) CreateLeakageCase(ctx context.Context, c leakage.Case, evi
 		TenantID:                   c.TenantID.String(),
 		CustomerID:                 c.CustomerID.String(),
 		ContractID:                 c.ContractID.String(),
+		ReconciliationRunID:        nullableUUID(c.ReconciliationRunID),
 		CaseType:                   string(c.Type),
 		Severity:                   string(c.Severity),
 		Status:                     string(c.Status),
@@ -312,6 +360,28 @@ func parseStoredTime(field, value string) (time.Time, error) {
 
 func formatStoredTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func nullableStoredTime(value time.Time) sql.NullString {
+	if value.IsZero() {
+		return sql.NullString{}
+	}
+
+	return sql.NullString{
+		String: formatStoredTime(value),
+		Valid:  true,
+	}
+}
+
+func nullableUUID(value uuid.UUID) sql.NullString {
+	if value == uuid.Nil {
+		return sql.NullString{}
+	}
+
+	return sql.NullString{
+		String: value.String(),
+		Valid:  true,
+	}
 }
 
 func decodeJSONMap(field, value string) (map[string]any, error) {
