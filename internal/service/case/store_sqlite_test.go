@@ -20,7 +20,6 @@ func TestSQLiteStoreListCases(t *testing.T) {
 
 	ctx := context.Background()
 	db := openTestSQLite(t, ctx)
-	defer db.Close()
 
 	tenantID := uuid.New()
 	customerID := uuid.New()
@@ -55,7 +54,6 @@ func TestSQLiteStoreGetCase(t *testing.T) {
 
 	ctx := context.Background()
 	db := openTestSQLite(t, ctx)
-	defer db.Close()
 
 	tenantID := uuid.New()
 	customerID := uuid.New()
@@ -102,7 +100,6 @@ func TestSQLiteStoreUpdateCaseStatus(t *testing.T) {
 
 	ctx := context.Background()
 	db := openTestSQLite(t, ctx)
-	defer db.Close()
 
 	tenantID := uuid.New()
 	customerID := uuid.New()
@@ -179,7 +176,6 @@ func TestSQLiteStoreUpdateCaseAssignee(t *testing.T) {
 
 	ctx := context.Background()
 	db := openTestSQLite(t, ctx)
-	defer db.Close()
 
 	tenantID := uuid.New()
 	customerID := uuid.New()
@@ -222,6 +218,11 @@ func openTestSQLite(t *testing.T, ctx context.Context) *sql.DB {
 	if err != nil {
 		t.Fatalf("sqlite.Open() error = %v", err)
 	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close sqlite: %v", err)
+		}
+	})
 
 	schema, err := os.ReadFile(sqliteSchemaPath(t))
 	if err != nil {

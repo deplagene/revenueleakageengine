@@ -27,7 +27,7 @@ func TestServiceCalculateExpectedRevenueFillsGeneratedFields(t *testing.T) {
 		CustomerID:     customerID,
 		ContractID:     contractID,
 		BillableItemID: billableItemID,
-		Period:         mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+		Period:         mustPeriod(t),
 		Pricing: FixedUsagePricing{
 			BaseFee:          valueobject.MustMoney("USD", 500_000),
 			IncludedQuantity: 100_000,
@@ -64,7 +64,7 @@ func TestServiceCalculateAndSaveExpectedRevenue(t *testing.T) {
 		CustomerID:     uuid.New(),
 		ContractID:     uuid.New(),
 		BillableItemID: uuid.New(),
-		Period:         mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z"),
+		Period:         mustPeriod(t),
 		Pricing: FixedUsagePricing{
 			BaseFee:          valueobject.MustMoney("USD", 500_000),
 			IncludedQuantity: 100_000,
@@ -101,7 +101,7 @@ func TestServiceBuildAndSaveActualRevenue(t *testing.T) {
 	contractID := uuid.New()
 	billableItemID := uuid.New()
 	invoiceID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 
 	entries, err := service.BuildAndSaveActualRevenue(context.Background(), BuildActualRevenueCommand{
 		TenantID:   tenantID,

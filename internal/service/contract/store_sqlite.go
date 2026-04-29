@@ -378,7 +378,7 @@ func termFromRow(row sqlitedb.ContractTerm) (*contractdomain.Term, error) {
 	return &term, nil
 }
 
-func parseStoredUUID(field string, value string) (uuid.UUID, error) {
+func parseStoredUUID(field, value string) (uuid.UUID, error) {
 	id, err := uuid.Parse(value)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("parse %s: %w", field, err)
@@ -387,7 +387,7 @@ func parseStoredUUID(field string, value string) (uuid.UUID, error) {
 	return id, nil
 }
 
-func parseStoredTime(field string, value string) (time.Time, error) {
+func parseStoredTime(field, value string) (time.Time, error) {
 	parsed, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("parse %s: %w", field, err)
@@ -411,7 +411,7 @@ func nullableStoredTime(value *time.Time) sql.NullString {
 	}
 }
 
-func decodeJSONMap(field string, value string) (map[string]any, error) {
+func decodeJSONMap(field, value string) (map[string]any, error) {
 	if value == "" {
 		return map[string]any{}, nil
 	}

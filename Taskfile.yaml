@@ -8,6 +8,8 @@ vars:
   SQLC_VERSION: "v1.31.0"
   SWAG_VERSION: "v1.16.4"
 
+  DB_PATH: "./local.db"
+
   BIN_DIR: "{{.ROOT_DIR}}/bin"
   GOLANGCI_LINT: "{{.BIN_DIR}}/golangci-lint"
   GCI: "{{.BIN_DIR}}/gci"
@@ -116,9 +118,38 @@ tasks:
         mkdir -p .cache/go-build
         GOCACHE={{.ROOT_DIR}}/.cache/go-build go test ./...
 
+  test-integration:
+    desc: "Запускает интеграционный Sprint 4 smoke-test"
+    cmds:
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build \
+        go test -tags=integration ./internal/app/gateway/http \
+          -run TestSprint4SmokeDatabaseDrivenReconciliation \
+          -count=1
+
   test-coverage:
     desc: "Запускает go test с покрытием и сохраняет профиль"
     cmds:
       - |
         mkdir -p .cache/go-build .cache/coverage
         GOCACHE={{.ROOT_DIR}}/.cache/go-build go test ./... -coverprofile=.cache/coverage/coverage.out
+
+  build:
+    desc: "Собирает все Go пакеты проекта"
+    cmds:
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go build ./...
+
+  run:
+    desc: "Запускает HTTP API локально"
+    cmds:
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go run ./cmd/revenueleakageengine
+
+  migrate-up:
+    desc: "Применяет SQLite миграции к локальной базе"
+    cmds:
+      - goose -dir internal/platform/sqlite/migrations sqlite3 {{.DB_PATH}} up

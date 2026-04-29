@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -38,11 +39,7 @@ func (s *SQLiteStore) UpsertUsageRecords(ctx context.Context, records []billing.
 	}
 
 	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	defer rollbackUncommitted(tx, &committed)
 
 	q := s.queries.WithTx(tx)
 	now := formatStoredTime(time.Now())
@@ -89,11 +86,7 @@ func (s *SQLiteStore) UpsertInvoice(ctx context.Context, inv billing.Invoice, li
 	}
 
 	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	defer rollbackUncommitted(tx, &committed)
 
 	q := s.queries.WithTx(tx)
 	now := formatStoredTime(time.Now())
@@ -452,6 +445,16 @@ func parseStoredUUID(field, value string) (uuid.UUID, error) {
 	}
 
 	return parsed, nil
+}
+
+func rollbackUncommitted(tx *sql.Tx, committed *bool) {
+	if *committed {
+		return
+	}
+
+	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		return
+	}
 }
 
 func parseNullableStoredUUID(field string, value sql.NullString) (uuid.UUID, error) {

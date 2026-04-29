@@ -22,8 +22,9 @@ const (
 	CaseTypePaymentShortfall            CaseType = "payment_shortfall"
 	CaseTypeUnclaimedRebate             CaseType = "unclaimed_rebate"
 	CaseTypeOverCrediting               CaseType = "over_crediting"
-	CaseTypeSLACreditNotAccounted       CaseType = "sla_credit_not_accounted"
-	CaseTypePricingRuleMisapplied       CaseType = "pricing_rule_misapplied"
+	//nolint:gosec // SLA is a service-level agreement acronym, not a credential.
+	CaseTypeSLACreditNotAccounted CaseType = "sla_credit_not_accounted"
+	CaseTypePricingRuleMisapplied CaseType = "pricing_rule_misapplied"
 )
 
 // Severity expresses the business urgency of a leakage case.

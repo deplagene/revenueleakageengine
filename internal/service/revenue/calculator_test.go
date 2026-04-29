@@ -15,7 +15,7 @@ func TestFixedUsageCalculatorCalculateExpectedRevenue(t *testing.T) {
 	customerID := uuid.New()
 	contractID := uuid.New()
 	billableItemID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 	calculatedAt := mustTime(t, "2026-05-01T01:00:00Z")
 
 	calculator := NewFixedUsageCalculator()
@@ -66,7 +66,7 @@ func TestFixedUsageCalculatorDoesNotChargeOverageBelowIncludedQuantity(t *testin
 	customerID := uuid.New()
 	contractID := uuid.New()
 	billableItemID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 
 	calculator := NewFixedUsageCalculator()
 
@@ -106,7 +106,7 @@ func TestFixedUsageCalculatorRejectsInvalidUsageRecords(t *testing.T) {
 	customerID := uuid.New()
 	contractID := uuid.New()
 	billableItemID := uuid.New()
-	period := mustPeriod(t, "2026-04-01T00:00:00Z", "2026-05-01T00:00:00Z")
+	period := mustPeriod(t)
 
 	tests := []struct {
 		name    string
@@ -215,10 +215,13 @@ func usageRecord(
 	}
 }
 
-func mustPeriod(t *testing.T, start, end string) valueobject.BillingPeriod {
+func mustPeriod(t *testing.T) valueobject.BillingPeriod {
 	t.Helper()
 
-	period, err := valueobject.NewBillingPeriod(mustTime(t, start), mustTime(t, end))
+	period, err := valueobject.NewBillingPeriod(
+		mustTime(t, "2026-04-01T00:00:00Z"),
+		mustTime(t, "2026-05-01T00:00:00Z"),
+	)
 	if err != nil {
 		t.Fatalf("NewBillingPeriod() error = %v", err)
 	}

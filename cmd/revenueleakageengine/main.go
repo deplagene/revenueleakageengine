@@ -25,7 +25,6 @@ import (
 	contractwork "github.com/deplagene/revenueleakageengine/internal/service/contract"
 	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
 	revenueservice "github.com/deplagene/revenueleakageengine/internal/service/revenue"
-
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
@@ -40,7 +39,7 @@ func main() {
 	}
 }
 
-func run() error {
+func run() (err error) {
 	ctx := context.Background()
 	cfg := config.Load()
 	logger := newLogger(cfg.Logging)
@@ -50,7 +49,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close sqlite: %w", closeErr)
+		}
+	}()
 
 	if err := runMigrations(ctx, db, cfg.Migrations.Path); err != nil {
 		return err
@@ -84,6 +87,9 @@ func run() error {
 		contractCommands,
 		ingestionCommands,
 	)
+	if err != nil {
+		return fmt.Errorf("build http handler: %w", err)
+	}
 
 	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
 	errCh := startHTTPServer(server, logger)

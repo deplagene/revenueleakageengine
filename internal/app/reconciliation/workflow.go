@@ -447,7 +447,7 @@ func int64ExpressionValue(key string, raw any) (int64, error) {
 	case int64:
 		return value, nil
 	case uint:
-		return int64(value), nil
+		return uint64ExpressionValue(key, uint64(value))
 	case uint8:
 		return int64(value), nil
 	case uint16:
@@ -455,11 +455,7 @@ func int64ExpressionValue(key string, raw any) (int64, error) {
 	case uint32:
 		return int64(value), nil
 	case uint64:
-		if value > uint64(^uint64(0)>>1) {
-			return 0, fmt.Errorf("%w: %s overflows int64", ErrPricingExpressionInvalid, key)
-		}
-
-		return int64(value), nil
+		return uint64ExpressionValue(key, value)
 	case float32:
 		return int64FloatExpressionValue(key, float64(value))
 	case float64:
@@ -471,6 +467,14 @@ func int64ExpressionValue(key string, raw any) (int64, error) {
 	default:
 		return 0, fmt.Errorf("%w: %s must be an integer", ErrPricingExpressionInvalid, key)
 	}
+}
+
+func uint64ExpressionValue(key string, value uint64) (int64, error) {
+	if value > uint64(^uint64(0)>>1) {
+		return 0, fmt.Errorf("%w: %s overflows int64", ErrPricingExpressionInvalid, key)
+	}
+
+	return int64(value), nil
 }
 
 func int64FloatExpressionValue(key string, value float64) (int64, error) {
@@ -490,7 +494,7 @@ func int64JSONNumberExpressionValue(key string, value json.Number) (int64, error
 
 	floatValue, floatErr := value.Float64()
 	if floatErr != nil {
-		return 0, fmt.Errorf("%w: parse %s: %v", ErrPricingExpressionInvalid, key, err)
+		return 0, fmt.Errorf("%w: parse %s: %w", ErrPricingExpressionInvalid, key, errors.Join(err, floatErr))
 	}
 
 	return int64FloatExpressionValue(key, floatValue)
@@ -499,7 +503,7 @@ func int64JSONNumberExpressionValue(key string, value json.Number) (int64, error
 func int64StringExpressionValue(key, value string) (int64, error) {
 	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%w: parse %s: %v", ErrPricingExpressionInvalid, key, err)
+		return 0, fmt.Errorf("%w: parse %s: %w", ErrPricingExpressionInvalid, key, err)
 	}
 
 	return parsed, nil
