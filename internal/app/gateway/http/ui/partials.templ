@@ -1,37 +1,76 @@
 package ui
 
+templ TenantSelector(tenantID string) {
+	<section class="tenant-card" aria-label="Выбор tenant">
+		<div>
+			<p class="eyebrow">Tenant</p>
+			<h2>Рабочий контекст</h2>
+			<p class="hint">Выберите tenant, чтобы загрузить его сверки и открытые кейсы.</p>
+		</div>
+		<form class="tenant-form" action="/ui" method="get">
+			<label>
+				<span>Tenant ID</span>
+				<input name="tenant_id" value={ tenantID } placeholder="11111111-1111-1111-1111-111111111111"/>
+			</label>
+			<button class="button secondary" type="submit">Применить</button>
+		</form>
+	</section>
+}
+
 templ RunForm(data RunFormData) {
-	<form class="form-grid" hx-post="/ui/reconciliation/run" hx-target="#run-result" hx-swap="innerHTML">
-		<label>
-			<span>Tenant ID</span>
-			<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
-		</label>
-		<label>
-			<span>ID контракта</span>
-			<input name="contract_id" value={ data.ContractID } placeholder="uuid контракта" required/>
-		</label>
-		<label>
-			<span>Начало периода</span>
-			<input name="period_start" value={ data.PeriodStart } placeholder="2026-04-01T00:00:00Z" required/>
-		</label>
-		<label>
-			<span>Конец периода</span>
-			<input name="period_end" value={ data.PeriodEnd } placeholder="2026-05-01T00:00:00Z" required/>
-		</label>
-		<label>
-			<span>Валюта</span>
-			<input name="currency" value={ data.Currency } placeholder="USD" required/>
-		</label>
-		<label>
-			<span>Минимальная утечка, minor units</span>
-			<input name="minimum_leakage_minor_units" value={ data.MinimumLeakageMinorUnits } inputmode="numeric" placeholder="0"/>
-		</label>
-		<label class="span-2">
-			<span>Trace ID</span>
-			<input name="trace_id" value={ data.TraceID } placeholder="ui-run-001"/>
-		</label>
-		<div class="form-actions span-2">
-			<button class="button" type="submit">Запустить сверку по данным БД</button>
+	<form class="run-form" hx-post="/ui/reconciliation/run" hx-target="#run-result" hx-swap="innerHTML">
+		<fieldset class="form-section">
+			<legend>Контекст</legend>
+			<p class="hint">Tenant и контракт определяют набор условий, usage и invoice фактов для сверки.</p>
+			<div class="form-grid">
+				<label>
+					<span>Tenant ID</span>
+					<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
+				</label>
+				<label>
+					<span>Contract ID</span>
+					<input name="contract_id" value={ data.ContractID } placeholder="uuid контракта" required/>
+				</label>
+			</div>
+		</fieldset>
+		<fieldset class="form-section">
+			<legend>Период</legend>
+			<p class="hint">Период используется для поиска актуальных условий договора и фактов биллинга.</p>
+			<div class="form-grid">
+				<label>
+					<span>Начало периода</span>
+					<input type="date" name="period_start" value={ data.PeriodStart } required/>
+				</label>
+				<label>
+					<span>Конец периода</span>
+					<input type="date" name="period_end" value={ data.PeriodEnd } required/>
+				</label>
+			</div>
+		</fieldset>
+		<fieldset class="form-section">
+			<legend>Параметры</legend>
+			<div class="form-grid">
+				<label>
+					<span>Валюта</span>
+					<input name="currency" value={ data.Currency } placeholder="USD" required/>
+				</label>
+				<label>
+					<span>Минимальная утечка</span>
+					<input name="minimum_leakage_minor_units" value={ data.MinimumLeakageMinorUnits } inputmode="numeric" placeholder="0"/>
+					<small>В minor units: например, 2500 = USD 25.00.</small>
+				</label>
+			</div>
+		</fieldset>
+		<fieldset class="form-section">
+			<legend>Trace</legend>
+			<label>
+				<span>Trace ID</span>
+				<input name="trace_id" value={ data.TraceID } placeholder="ui-reconciliation"/>
+			</label>
+		</fieldset>
+		<div class="form-actions sticky-actions">
+			<button class="button primary" type="submit">Запустить сверку</button>
+			<button class="button ghost" type="reset">Сбросить</button>
 		</div>
 	</form>
 	<div id="run-result" class="result-slot">
@@ -43,9 +82,11 @@ templ RunResult(data RunResultData) {
 	<div class="run-result success">
 		@ifError(data.Error)
 		if data.Error == "" {
-			<div>
-				<p class="eyebrow">Сверка завершена</p>
-				<h3>{ data.RunID }</h3>
+			<div class="result-heading">
+				<div>
+					<p class="eyebrow">Сверка завершена</p>
+					<h3>{ data.RunID }</h3>
+				</div>
 			</div>
 			<div class="metric-grid compact-grid">
 				<article class="metric">
@@ -79,10 +120,10 @@ templ RunResult(data RunResultData) {
 						<tbody>
 							for _, item := range data.Cases {
 								<tr>
-									<td><a href={ item.DetailPath }>{ item.ID }</a></td>
-									<td><span class={ item.StatusClass }>{ item.Status }</span></td>
-									<td>{ item.LeakageLabel }</td>
-									<td>{ item.ConfidenceLabel }</td>
+									<td data-label="Кейс"><a href={ item.DetailPath }>{ item.ID }</a></td>
+									<td data-label="Статус"><span class={ item.StatusClass }>{ item.Status }</span></td>
+									<td data-label="Утечка">{ item.LeakageLabel }</td>
+									<td data-label="Уверенность">{ item.ConfidenceLabel }</td>
 								</tr>
 							}
 						</tbody>
@@ -93,56 +134,50 @@ templ RunResult(data RunResultData) {
 	</div>
 }
 
-templ RunsTable(data RunsTableData) {
+templ RunsList(data RunsTableData) {
 	if len(data.Runs) == 0 {
 		<div class="empty">Запусков сверки пока нет.</div>
 	} else {
-		<div class="table-wrap">
-			<table>
-				<thead>
-					<tr>
-						<th>Запуск</th>
-						<th>Контракт</th>
-						<th>Период</th>
-						<th>Статус</th>
-						<th>Утечка</th>
-						<th>Кейсы</th>
-						<th>Старт</th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, run := range data.Runs {
-						<tr>
-							<td>
-								<strong>{ run.ID }</strong>
-								if run.TraceID != "" {
-									<small>{ run.TraceID }</small>
-								}
-							</td>
-							<td>{ run.ContractID }</td>
-							<td>{ run.PeriodLabel }</td>
-							<td><span class={ run.StatusClass }>{ run.Status }</span></td>
-							<td>{ run.LeakageLabel }</td>
-							<td>{ run.Cases }</td>
-							<td>{ run.StartedAt }</td>
-						</tr>
+		<div class="record-list">
+			for _, run := range data.Runs {
+				<article class="run-card">
+					<div class="record-main">
+						<div>
+							<strong>{ run.ContractID }</strong>
+							<small>{ run.PeriodLabel }</small>
+							<small class="mono">запуск { run.ID }</small>
+						</div>
+						<span class={ run.StatusClass }>{ run.Status }</span>
+					</div>
+					<div class="record-meta">
+						<span>
+							<small>Утечка</small>
+							<b>{ run.LeakageLabel }</b>
+						</span>
+						<span>
+							<small>Кейсы</small>
+							<b>{ run.Cases }</b>
+						</span>
+						<span>
+							<small>Старт</small>
+							<b>{ run.StartedAt }</b>
+						</span>
+					</div>
+					if run.TraceID != "" {
+						<small class="mono">{ run.TraceID }</small>
 					}
-				</tbody>
-			</table>
+				</article>
+			}
 		</div>
 	}
 }
 
+templ RunsTable(data RunsTableData) {
+	@RunsList(data)
+}
+
 templ CaseFilters(data CasesTableData) {
-	<form class="filter-bar" hx-get="/ui/cases" hx-target="#cases-table" hx-swap="outerHTML" hx-push-url="true">
-		<label>
-			<span>Tenant ID</span>
-			<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
-		</label>
-		<label>
-			<span>ID контракта</span>
-			<input name="contract_id" value={ data.ContractID } placeholder="необязательно"/>
-		</label>
+	<form class="filter-bar" action="/ui/cases" method="get">
 		<label>
 			<span>Статус</span>
 			<select name="status">
@@ -153,8 +188,72 @@ templ CaseFilters(data CasesTableData) {
 				<option value="dismissed" selected?={ data.Status == "dismissed" }>Отклонён</option>
 			</select>
 		</label>
-		<button class="button secondary" type="submit">Применить фильтр</button>
+		<label>
+			<span>Tenant ID</span>
+			<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
+		</label>
+		<label>
+			<span>Дата от</span>
+			<input type="date" name="date_from" value={ data.DateFrom }/>
+		</label>
+		<label>
+			<span>Дата до</span>
+			<input type="date" name="date_to" value={ data.DateTo }/>
+		</label>
+		<label>
+			<span>Важность</span>
+			<select name="severity">
+				<option value="">Любая важность</option>
+				<option value="low" selected?={ data.Severity == "low" }>Низкая</option>
+				<option value="medium" selected?={ data.Severity == "medium" }>Средняя</option>
+				<option value="high" selected?={ data.Severity == "high" }>Высокая</option>
+				<option value="critical" selected?={ data.Severity == "critical" }>Критическая</option>
+			</select>
+		</label>
+		<label class="filter-search">
+			<span>Поиск</span>
+			<input name="search" value={ data.Search } placeholder="case id, контракт, ответственный, trace"/>
+		</label>
+		<button class="button secondary" type="submit">Применить</button>
 	</form>
+}
+
+templ CasesCompactList(data CasesTableData) {
+	<div id="cases-table">
+		@ifError(data.Error)
+		if data.Error == "" && len(data.Cases) == 0 {
+			<div class="empty">{ data.EmptyMessage }</div>
+		}
+		if len(data.Cases) > 0 {
+			<div class="record-list">
+				for _, item := range data.Cases {
+					<article class="case-card">
+						<div class="record-main">
+							<div>
+								<a class="case-id" href={ item.DetailPath }>{ item.ID }</a>
+								<small>{ item.Type } · { item.PeriodLabel }</small>
+							</div>
+							<span class={ item.StatusClass }>{ item.Status }</span>
+						</div>
+						<div class="record-meta">
+							<span>
+								<small>Утечка</small>
+								<b>{ item.LeakageLabel }</b>
+							</span>
+							<span>
+								<small>Причина</small>
+								<b>{ item.RootCause }</b>
+							</span>
+							<span>
+								<small>Ответственный</small>
+								<b>{ item.Assignee }</b>
+							</span>
+						</div>
+					</article>
+				}
+			</div>
+		}
+	</div>
 }
 
 templ CasesTable(data CasesTableData) {
@@ -168,28 +267,28 @@ templ CasesTable(data CasesTableData) {
 				<table>
 					<thead>
 						<tr>
-							<th>Кейс</th>
-							<th>Важность</th>
+							<th>Case ID</th>
 							<th>Статус</th>
-							<th>Причина</th>
 							<th>Утечка</th>
+							<th>Причина</th>
+							<th>Обновлён</th>
 							<th>Ответственный</th>
-							<th>Обнаружен</th>
+							<th>Важность</th>
 						</tr>
 					</thead>
 					<tbody>
 						for _, item := range data.Cases {
 							<tr>
-								<td>
+								<td data-label="Case ID">
 									<a href={ item.DetailPath }>{ item.ID }</a>
 									<small>{ item.Type }</small>
 								</td>
-								<td>{ item.Severity }</td>
-								<td><span class={ item.StatusClass }>{ item.Status }</span></td>
-								<td>{ item.RootCause }</td>
-								<td>{ item.LeakageLabel }</td>
-								<td>{ item.Assignee }</td>
-								<td>{ item.DetectedAt }</td>
+								<td data-label="Статус"><span class={ item.StatusClass }>{ item.Status }</span></td>
+								<td data-label="Утечка">{ item.LeakageLabel }</td>
+								<td data-label="Причина">{ item.RootCause }</td>
+								<td data-label="Обновлён">{ item.DetectedAt }</td>
+								<td data-label="Ответственный">{ item.Assignee }</td>
+								<td data-label="Важность"><span class={ item.SeverityClass }>{ item.Severity }</span></td>
 							</tr>
 						}
 					</tbody>
@@ -197,6 +296,47 @@ templ CasesTable(data CasesTableData) {
 			</div>
 		}
 	</div>
+}
+
+templ CasePreview(data CaseRow) {
+	<aside class="panel preview-card">
+		<div class="panel-heading">
+			<div>
+				<p class="eyebrow">Детали</p>
+				<h2>Предпросмотр кейса</h2>
+			</div>
+		</div>
+		if data.ID == "" {
+			<div class="empty">Выберите tenant или измените фильтры, чтобы увидеть кейс.</div>
+		} else {
+			<div class="preview-stack">
+				<a class="case-id large" href={ data.DetailPath }>{ data.ID }</a>
+				<div class="badge-row">
+					<span class={ data.StatusClass }>{ data.Status }</span>
+					<span class={ data.SeverityClass }>{ data.Severity }</span>
+				</div>
+				<dl class="detail-list">
+					<div>
+						<dt>Потенциальная утечка</dt>
+						<dd>{ data.LeakageLabel }</dd>
+					</div>
+					<div>
+						<dt>Причина</dt>
+						<dd>{ data.RootCause }</dd>
+					</div>
+					<div>
+						<dt>Ответственный</dt>
+						<dd>{ data.Assignee }</dd>
+					</div>
+					<div>
+						<dt>Обновлён</dt>
+						<dd>{ data.DetectedAt }</dd>
+					</div>
+				</dl>
+				<a class="button secondary full-width" href={ data.DetailPath }>Открыть кейс</a>
+			</div>
+		}
+	</aside>
 }
 
 templ CaseDetailPanel(data CaseDetailPanelData) {

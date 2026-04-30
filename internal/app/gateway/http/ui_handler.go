@@ -9,6 +9,7 @@ import (
 	stdhttp "net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
@@ -74,10 +75,7 @@ func (h *Handler) handleUICases(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		return
 	}
 
-	renderUI(w, r, ui.CasesPage(ui.CasesPageData{
-		Title: "Кейсы утечек",
-		Table: table,
-	}))
+	renderUI(w, r, ui.CasesPage(newCasesPageData(table)))
 }
 
 func (h *Handler) handleUICaseDetail(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -182,6 +180,7 @@ func (h *Handler) dashboardPageData(r *stdhttp.Request) ui.DashboardPageData {
 		TenantID:           tenantRaw,
 		CompletedRunsLabel: "0",
 		OpenCasesLabel:     "0",
+		LastRunLabel:       "нет запусков",
 		TotalLeakageLabel:  ui.FormatMoney("USD", 0),
 		RunForm:            defaultRunFormData(tenantRaw),
 		RecentCases: ui.CasesTableData{
@@ -203,6 +202,9 @@ func (h *Handler) dashboardPageData(r *stdhttp.Request) ui.DashboardPageData {
 		data.Runs = newRunRows(runsResult.Runs)
 		data.CompletedRunsLabel = ui.FormatCount(int64(len(runsResult.Runs)))
 		data.TotalLeakageLabel = totalLeakageLabel(runsResult.Runs)
+		if len(data.Runs) > 0 {
+			data.LastRunLabel = data.Runs[0].StartedAt
+		}
 	}
 
 	if tenantRaw != "" {
@@ -222,8 +224,8 @@ func (h *Handler) dashboardPageData(r *stdhttp.Request) ui.DashboardPageData {
 func defaultRunFormData(tenantID string) ui.RunFormData {
 	return ui.RunFormData{
 		TenantID:                 tenantID,
-		PeriodStart:              "2026-04-01T00:00:00Z",
-		PeriodEnd:                "2026-05-01T00:00:00Z",
+		PeriodStart:              "2026-04-01",
+		PeriodEnd:                "2026-05-01",
 		Currency:                 "USD",
 		MinimumLeakageMinorUnits: "0",
 		TraceID:                  "ui-reconciliation",
@@ -254,6 +256,10 @@ func (h *Handler) casesTableData(r *stdhttp.Request, limit int) ui.CasesTableDat
 		TenantID:     tenantRaw,
 		ContractID:   strings.TrimSpace(r.URL.Query().Get("contract_id")),
 		Status:       strings.TrimSpace(r.URL.Query().Get("status")),
+		DateFrom:     strings.TrimSpace(r.URL.Query().Get("date_from")),
+		DateTo:       strings.TrimSpace(r.URL.Query().Get("date_to")),
+		Severity:     strings.TrimSpace(r.URL.Query().Get("severity")),
+		Search:       strings.TrimSpace(r.URL.Query().Get("search")),
 		EmptyMessage: "По текущему фильтру кейсов нет.",
 	}
 	if tenantRaw == "" {
@@ -293,11 +299,30 @@ func listCasesCommandFromUIRequest(r *stdhttp.Request, limit int) (caseapp.ListC
 		return caseapp.ListCasesCommand{}, err
 	}
 
+	severity, err := optionalCaseSeverity(r.URL.Query().Get("severity"))
+	if err != nil {
+		return caseapp.ListCasesCommand{}, err
+	}
+
+	detectedFrom, err := optionalUIDateStart("date from", r.URL.Query().Get("date_from"))
+	if err != nil {
+		return caseapp.ListCasesCommand{}, err
+	}
+
+	detectedTo, err := optionalUIDateEnd("date to", r.URL.Query().Get("date_to"))
+	if err != nil {
+		return caseapp.ListCasesCommand{}, err
+	}
+
 	return caseapp.ListCasesCommand{
-		TenantID:   tenantID,
-		ContractID: contractID,
-		Status:     status,
-		Limit:      limit,
+		TenantID:     tenantID,
+		ContractID:   contractID,
+		Status:       status,
+		Severity:     severity,
+		DetectedFrom: detectedFrom,
+		DetectedTo:   detectedTo,
+		Search:       strings.TrimSpace(r.URL.Query().Get("search")),
+		Limit:        limit,
 	}, nil
 }
 
@@ -384,6 +409,58 @@ func runReconciliationCommandFromForm(
 	}, tenantID.String(), nil
 }
 
+func newCasesPageData(table ui.CasesTableData) ui.CasesPageData {
+	data := ui.CasesPageData{
+		Title:                   "Кейсы",
+		Table:                   table,
+		OpenCasesLabel:          "0",
+		InvestigatingCasesLabel: "0",
+		ClosedCasesLabel:        "0",
+		PotentialLeakageLabel:   ui.FormatMoney("USD", 0),
+	}
+
+	if len(table.Cases) > 0 {
+		data.Preview = table.Cases[0]
+	}
+
+	var openCases int64
+	var investigatingCases int64
+	var closedCases int64
+	var leakageTotal int64
+	currency := ""
+	mixedCurrency := false
+
+	for _, item := range table.Cases {
+		switch item.StatusValue {
+		case string(leakage.StatusOpen):
+			openCases++
+		case string(leakage.StatusInvestigating):
+			investigatingCases++
+		case string(leakage.StatusResolved), string(leakage.StatusDismissed):
+			closedCases++
+		}
+
+		if currency == "" {
+			currency = item.Currency
+		}
+		if item.Currency != "" && item.Currency != currency {
+			mixedCurrency = true
+		}
+		leakageTotal += item.LeakageMinorUnits
+	}
+
+	data.OpenCasesLabel = ui.FormatCount(openCases)
+	data.InvestigatingCasesLabel = ui.FormatCount(investigatingCases)
+	data.ClosedCasesLabel = ui.FormatCount(closedCases)
+	if mixedCurrency {
+		data.PotentialLeakageLabel = "разные валюты"
+	} else if currency != "" {
+		data.PotentialLeakageLabel = ui.FormatMoney(currency, leakageTotal)
+	}
+
+	return data
+}
+
 func optionalInt64Form(field, raw string) (int64, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -393,6 +470,33 @@ func optionalInt64Form(field, raw string) (int64, error) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("parse %s: %w", field, err)
+	}
+
+	return value, nil
+}
+
+func optionalUIDateStart(field, raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+
+	return parseDate(field, raw)
+}
+
+func optionalUIDateEnd(field, raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+
+	value, err := parseDate(field, raw)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if len(raw) == len("2006-01-02") {
+		value = value.AddDate(0, 0, 1)
 	}
 
 	return value, nil
@@ -469,24 +573,29 @@ func newCaseRowsFromReconciliation(tenantID string, cases []leakage.Case) []ui.C
 		}
 
 		rows = append(rows, ui.CaseRow{
-			ID:              item.ID.String(),
-			TenantID:        item.TenantID.String(),
-			ContractID:      item.ContractID.String(),
-			RunID:           optionalUUIDString(item.ReconciliationRunID),
-			Type:            ui.CaseTypeLabel(string(item.Type)),
-			Severity:        ui.SeverityLabel(string(item.Severity)),
-			Status:          ui.StatusLabel(string(item.Status)),
-			StatusClass:     ui.StatusClass(string(item.Status)),
-			DetectedAt:      ui.FormatTime(item.DetectedAt),
-			PeriodLabel:     ui.FormatPeriod(item.Period.Start, item.Period.End),
-			ExpectedLabel:   ui.FormatMoney(item.ExpectedAmount.Currency, item.ExpectedAmount.MinorUnits),
-			ActualLabel:     ui.FormatMoney(item.ActualAmount.Currency, item.ActualAmount.MinorUnits),
-			LeakageLabel:    ui.FormatMoney(item.LeakageAmount.Currency, item.LeakageAmount.MinorUnits),
-			ConfidenceLabel: ui.FormatConfidence(item.ConfidenceScore.BasisPoints),
-			RootCause:       ui.RootCauseLabel(string(item.RootCauseCategory)),
-			Assignee:        assignee,
-			TraceID:         item.TraceID,
-			DetailPath:      ui.CaseDetailPath(tenantID, item.ID.String()),
+			ID:                item.ID.String(),
+			TenantID:          item.TenantID.String(),
+			ContractID:        item.ContractID.String(),
+			RunID:             optionalUUIDString(item.ReconciliationRunID),
+			Type:              ui.CaseTypeLabel(string(item.Type)),
+			Severity:          ui.SeverityLabel(string(item.Severity)),
+			SeverityValue:     string(item.Severity),
+			SeverityClass:     ui.SeverityClass(string(item.Severity)),
+			Status:            ui.StatusLabel(string(item.Status)),
+			StatusValue:       string(item.Status),
+			StatusClass:       ui.StatusClass(string(item.Status)),
+			DetectedAt:        ui.FormatTime(item.DetectedAt),
+			PeriodLabel:       ui.FormatPeriod(item.Period.Start, item.Period.End),
+			ExpectedLabel:     ui.FormatMoney(item.ExpectedAmount.Currency, item.ExpectedAmount.MinorUnits),
+			ActualLabel:       ui.FormatMoney(item.ActualAmount.Currency, item.ActualAmount.MinorUnits),
+			LeakageLabel:      ui.FormatMoney(item.LeakageAmount.Currency, item.LeakageAmount.MinorUnits),
+			LeakageMinorUnits: item.LeakageAmount.MinorUnits,
+			Currency:          item.LeakageAmount.Currency,
+			ConfidenceLabel:   ui.FormatConfidence(item.ConfidenceScore.BasisPoints),
+			RootCause:         ui.RootCauseLabel(string(item.RootCauseCategory)),
+			Assignee:          assignee,
+			TraceID:           item.TraceID,
+			DetailPath:        ui.CaseDetailPath(tenantID, item.ID.String()),
 		})
 	}
 

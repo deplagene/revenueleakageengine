@@ -186,17 +186,32 @@ FROM leakage_cases
 WHERE tenant_id = ?1
   AND (?2 IS NULL OR contract_id = ?2)
   AND (?3 IS NULL OR status = ?3)
+  AND (?4 IS NULL OR severity = ?4)
+  AND (?5 IS NULL OR detected_at >= ?5)
+  AND (?6 IS NULL OR detected_at < ?6)
+  AND (
+    ?7 IS NULL
+    OR id LIKE '%' || ?7 || '%'
+    OR contract_id LIKE '%' || ?7 || '%'
+    OR root_cause_category LIKE '%' || ?7 || '%'
+    OR assignee LIKE '%' || ?7 || '%'
+    OR trace_id LIKE '%' || ?7 || '%'
+  )
 ORDER BY detected_at DESC, id DESC
-LIMIT ?5
-OFFSET ?4
+LIMIT ?9
+OFFSET ?8
 `
 
 type ListLeakageCasesParams struct {
-	TenantID    string      `json:"tenant_id"`
-	ContractID  interface{} `json:"contract_id"`
-	Status      interface{} `json:"status"`
-	OffsetCount int64       `json:"offset_count"`
-	LimitCount  int64       `json:"limit_count"`
+	TenantID     string      `json:"tenant_id"`
+	ContractID   interface{} `json:"contract_id"`
+	Status       interface{} `json:"status"`
+	Severity     interface{} `json:"severity"`
+	DetectedFrom interface{} `json:"detected_from"`
+	DetectedTo   interface{} `json:"detected_to"`
+	SearchQuery  interface{} `json:"search_query"`
+	OffsetCount  int64       `json:"offset_count"`
+	LimitCount   int64       `json:"limit_count"`
 }
 
 func (q *Queries) ListLeakageCases(ctx context.Context, arg ListLeakageCasesParams) ([]LeakageCase, error) {
@@ -204,6 +219,10 @@ func (q *Queries) ListLeakageCases(ctx context.Context, arg ListLeakageCasesPara
 		arg.TenantID,
 		arg.ContractID,
 		arg.Status,
+		arg.Severity,
+		arg.DetectedFrom,
+		arg.DetectedTo,
+		arg.SearchQuery,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)

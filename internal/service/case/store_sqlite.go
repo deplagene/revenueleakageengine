@@ -34,11 +34,15 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 // optional filters.
 func (s *SQLiteStore) ListCases(ctx context.Context, cmd ListCasesCommand) ([]leakage.Case, error) {
 	rows, err := s.queries.ListLeakageCases(ctx, sqlitedb.ListLeakageCasesParams{
-		TenantID:    cmd.TenantID.String(),
-		ContractID:  nullableUUID(cmd.ContractID),
-		Status:      nullableString(string(cmd.Status)),
-		LimitCount:  int64(cmd.Limit),
-		OffsetCount: int64(cmd.Offset),
+		TenantID:     cmd.TenantID.String(),
+		ContractID:   nullableUUID(cmd.ContractID),
+		Status:       nullableString(string(cmd.Status)),
+		Severity:     nullableString(string(cmd.Severity)),
+		DetectedFrom: nullableTime(cmd.DetectedFrom),
+		DetectedTo:   nullableTime(cmd.DetectedTo),
+		SearchQuery:  nullableString(cmd.Search),
+		LimitCount:   int64(cmd.Limit),
+		OffsetCount:  int64(cmd.Offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list leakage cases: %w", err)
@@ -401,6 +405,17 @@ func nullableString(value string) sql.NullString {
 
 	return sql.NullString{
 		String: value,
+		Valid:  true,
+	}
+}
+
+func nullableTime(value time.Time) sql.NullString {
+	if value.IsZero() {
+		return sql.NullString{}
+	}
+
+	return sql.NullString{
+		String: value.UTC().Format(time.RFC3339Nano),
 		Valid:  true,
 	}
 }

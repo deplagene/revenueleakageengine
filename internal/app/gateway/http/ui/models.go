@@ -13,6 +13,7 @@ type DashboardPageData struct {
 	TotalLeakageLabel  string
 	CompletedRunsLabel string
 	OpenCasesLabel     string
+	LastRunLabel       string
 	RunForm            RunFormData
 	Runs               []RunRow
 	RecentCases        CasesTableData
@@ -61,14 +62,23 @@ type RunRow struct {
 }
 
 type CasesPageData struct {
-	Title string
-	Table CasesTableData
+	Title                   string
+	Table                   CasesTableData
+	OpenCasesLabel          string
+	InvestigatingCasesLabel string
+	ClosedCasesLabel        string
+	PotentialLeakageLabel   string
+	Preview                 CaseRow
 }
 
 type CasesTableData struct {
 	TenantID     string
 	ContractID   string
 	Status       string
+	DateFrom     string
+	DateTo       string
+	Severity     string
+	Search       string
 	Error        string
 	EmptyMessage string
 	Cases        []CaseRow
@@ -90,24 +100,29 @@ type CaseDetailPanelData struct {
 }
 
 type CaseRow struct {
-	ID              string
-	TenantID        string
-	ContractID      string
-	RunID           string
-	Type            string
-	Severity        string
-	Status          string
-	StatusClass     string
-	DetectedAt      string
-	PeriodLabel     string
-	ExpectedLabel   string
-	ActualLabel     string
-	LeakageLabel    string
-	ConfidenceLabel string
-	RootCause       string
-	Assignee        string
-	TraceID         string
-	DetailPath      string
+	ID                string
+	TenantID          string
+	ContractID        string
+	RunID             string
+	Type              string
+	Severity          string
+	SeverityValue     string
+	SeverityClass     string
+	Status            string
+	StatusValue       string
+	StatusClass       string
+	DetectedAt        string
+	PeriodLabel       string
+	ExpectedLabel     string
+	ActualLabel       string
+	LeakageLabel      string
+	LeakageMinorUnits int64
+	Currency          string
+	ConfidenceLabel   string
+	RootCause         string
+	Assignee          string
+	TraceID           string
+	DetailPath        string
 }
 
 type EvidenceRow struct {
@@ -181,6 +196,10 @@ func FormatPeriod(start, end time.Time) string {
 
 func StatusClass(status string) string {
 	return "status status-" + strings.ReplaceAll(strings.ToLower(status), "_", "-")
+}
+
+func SeverityClass(severity string) string {
+	return "severity severity-" + strings.ReplaceAll(strings.ToLower(severity), "_", "-")
 }
 
 func StatusLabel(status string) string {

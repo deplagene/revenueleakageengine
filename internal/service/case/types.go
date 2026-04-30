@@ -5,6 +5,7 @@ package casework
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/deplagene/revenueleakageengine/internal/domain/leakage"
 	"github.com/google/uuid"
@@ -38,25 +39,41 @@ var (
 	ErrLimitInvalid = errors.New("limit must be greater than zero")
 	// ErrOffsetInvalid reports that the requested page offset is negative.
 	ErrOffsetInvalid = errors.New("offset cannot be negative")
+	// ErrSeverityInvalid reports that a case severity filter is unsupported.
+	ErrSeverityInvalid = errors.New("invalid severity")
 )
 
 // ListCasesCommand describes one read-model query for leakage cases.
 type ListCasesCommand struct {
-	TenantID   uuid.UUID
-	ContractID uuid.UUID
-	Status     leakage.Status
-	Limit      int
-	Offset     int
+	TenantID     uuid.UUID
+	ContractID   uuid.UUID
+	Status       leakage.Status
+	Severity     leakage.Severity
+	DetectedFrom time.Time
+	DetectedTo   time.Time
+	Search       string
+	Limit        int
+	Offset       int
 }
 
 // Normalize applies safe defaults and upper bounds to paging parameters.
 func (c ListCasesCommand) Normalize() ListCasesCommand {
+	c.Search = strings.TrimSpace(c.Search)
+
 	if c.Limit == 0 {
 		c.Limit = defaultListLimit
 	}
 
 	if c.Limit > maxListLimit {
 		c.Limit = maxListLimit
+	}
+
+	if !c.DetectedFrom.IsZero() {
+		c.DetectedFrom = c.DetectedFrom.UTC()
+	}
+
+	if !c.DetectedTo.IsZero() {
+		c.DetectedTo = c.DetectedTo.UTC()
 	}
 
 	return c
@@ -76,7 +93,12 @@ func (c ListCasesCommand) Validate() error {
 		return ErrOffsetInvalid
 	}
 
-	return nil
+	switch c.Severity {
+	case "", leakage.SeverityLow, leakage.SeverityMedium, leakage.SeverityHigh, leakage.SeverityCritical:
+		return nil
+	default:
+		return ErrSeverityInvalid
+	}
 }
 
 // ListCasesResult contains one page of leakage cases.
