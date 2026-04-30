@@ -190,6 +190,30 @@ func FormatTime(value time.Time) string {
 	return value.UTC().Format("2006-01-02 15:04 UTC")
 }
 
+func FormatMonthYear(value time.Time) string {
+	if value.IsZero() {
+		return "-"
+	}
+
+	months := [...]string{
+		"январь",
+		"февраль",
+		"март",
+		"апрель",
+		"май",
+		"июнь",
+		"июль",
+		"август",
+		"сентябрь",
+		"октябрь",
+		"ноябрь",
+		"декабрь",
+	}
+
+	value = value.UTC()
+	return fmt.Sprintf("%s %d", months[value.Month()-1], value.Year())
+}
+
 func FormatPeriod(start, end time.Time) string {
 	return fmt.Sprintf("%s -> %s", start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02"))
 }

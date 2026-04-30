@@ -202,8 +202,9 @@ func (h *Handler) dashboardPageData(r *stdhttp.Request) ui.DashboardPageData {
 		data.Runs = newRunRows(runsResult.Runs)
 		data.CompletedRunsLabel = ui.FormatCount(int64(len(runsResult.Runs)))
 		data.TotalLeakageLabel = totalLeakageLabel(runsResult.Runs)
-		if len(data.Runs) > 0 {
-			data.LastRunLabel = data.Runs[0].StartedAt
+		if len(runsResult.Runs) > 0 {
+			periodMonth := runsResult.Runs[0].Period.End.AddDate(0, 0, -1)
+			data.LastRunLabel = "Сверка за " + ui.FormatMonthYear(periodMonth)
 		}
 	}
 

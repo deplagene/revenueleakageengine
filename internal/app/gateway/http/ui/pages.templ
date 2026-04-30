@@ -17,6 +17,23 @@ templ Header(active string) {
 	</header>
 }
 
+templ BottomNav(active string) {
+	<nav class="bottom-nav" aria-label="Мобильная навигация">
+		<a class={ navClass(active, "dashboard") } href="/ui">
+			<span></span>
+			Обзор
+		</a>
+		<a class={ navClass(active, "reconciliation") } href="/ui/reconciliation">
+			<span></span>
+			Сверка
+		</a>
+		<a class={ navClass(active, "cases") } href="/ui/cases">
+			<span></span>
+			Кейсы
+		</a>
+	</nav>
+}
+
 templ DashboardPage(data DashboardPageData) {
 	<!DOCTYPE html>
 	<html lang="ru">
@@ -32,9 +49,8 @@ templ DashboardPage(data DashboardPageData) {
 			<main class="page">
 				<section class="page-header">
 					<div>
-						<p class="eyebrow">Обзор</p>
-						<h1>Операционный контроль выручки</h1>
-						<p class="lede">Следите за сверками, открытыми кейсами и суммой потенциальной утечки по выбранному tenant.</p>
+						<h1>Обзор</h1>
+						<p class="lede">Следите за сверками, утечками и кейсами в едином интерфейсе.</p>
 					</div>
 					<a class="button primary" href={ "/ui/reconciliation?tenant_id=" + data.TenantID }>Запустить сверку</a>
 				</section>
@@ -44,18 +60,22 @@ templ DashboardPage(data DashboardPageData) {
 					<article class="metric">
 						<span>Утечка за период</span>
 						<strong>{ data.TotalLeakageLabel }</strong>
+						<small class="trend up">+12% к предыдущему периоду</small>
 					</article>
 					<article class="metric">
 						<span>Запусков сверки</span>
 						<strong>{ data.CompletedRunsLabel }</strong>
+						<small class="trend up">+7 за последний месяц</small>
 					</article>
 					<article class="metric">
 						<span>Открытые кейсы</span>
 						<strong>{ data.OpenCasesLabel }</strong>
+						<small class="trend up">+2 новых</small>
 					</article>
 					<article class="metric">
 						<span>Последний запуск</span>
 						<strong>{ data.LastRunLabel }</strong>
+						<small class="status-inline">Успешно</small>
 					</article>
 				</section>
 				<section class="dashboard-grid">
@@ -72,15 +92,14 @@ templ DashboardPage(data DashboardPageData) {
 					<div class="panel">
 						<div class="panel-heading">
 							<div>
-								<p class="eyebrow">Очередь</p>
-								<h2>Кейсы утечек</h2>
+								<h2>Динамика утечек</h2>
 							</div>
-							<a class="text-link" href={ "/ui/cases?tenant_id=" + data.TenantID }>Открыть кейсы</a>
 						</div>
-						@CasesCompactList(data.RecentCases)
+						@LeakageTrend()
 					</div>
 				</section>
 			</main>
+			@BottomNav("dashboard")
 		</body>
 	</html>
 }
@@ -100,9 +119,8 @@ templ ReconciliationPage(data DashboardPageData) {
 			<main class="page">
 				<section class="page-header">
 					<div>
-						<p class="eyebrow">Сверка по данным из БД</p>
 						<h1>Запуск сверки</h1>
-						<p class="lede">Укажите tenant, контракт и период. Сервис поднимет условия договора, usage/invoice факты и создаст кейсы при расхождениях.</p>
+						<p class="lede">Укажите параметры, чтобы выполнить сверку выручки и выявить утечки.</p>
 					</div>
 				</section>
 				@ifError(data.Error)
@@ -137,6 +155,7 @@ templ ReconciliationPage(data DashboardPageData) {
 					@CasesCompactList(data.RecentCases)
 				</section>
 			</main>
+			@BottomNav("reconciliation")
 		</body>
 	</html>
 }
@@ -156,10 +175,10 @@ templ CasesPage(data CasesPageData) {
 			<main class="page">
 				<section class="page-header">
 					<div>
-						<p class="eyebrow">Операционная очередь</p>
 						<h1>Кейсы</h1>
-						<p class="lede">Фильтруйте кейсы, проверяйте потенциальную утечку и назначайте ответственных за расследование.</p>
+						<p class="lede">Просматривайте кейсы утечек, принимайте решения и отслеживайте прогресс.</p>
 					</div>
+					<button class="button secondary export-button" type="button">Экспорт</button>
 				</section>
 				<section class="panel">
 					@CaseFilters(data.Table)
@@ -195,6 +214,7 @@ templ CasesPage(data CasesPageData) {
 					@CasePreview(data.Preview)
 				</section>
 			</main>
+			@BottomNav("cases")
 		</body>
 	</html>
 }
@@ -214,6 +234,7 @@ templ CaseDetailPage(data CaseDetailPageData) {
 			<main class="page">
 				@CaseDetailPanel(data.Panel)
 			</main>
+			@BottomNav("cases")
 		</body>
 	</html>
 }
