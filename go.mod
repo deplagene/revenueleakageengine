@@ -3,6 +3,7 @@ module github.com/deplagene/revenueleakageengine
 go 1.26.2
 
 require (
+	github.com/a-h/templ v0.3.1001
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/httprate v0.15.0
 	github.com/google/uuid v1.6.0

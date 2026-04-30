@@ -41,6 +41,29 @@ WHERE tenant_id = sqlc.arg(tenant_id)
   AND period_end <= sqlc.arg(period_end)
 ORDER BY customer_id, billable_item_id, period_start, period_end, recognized_at;
 
+-- name: ListReconciliationRuns :many
+SELECT
+    id,
+    tenant_id,
+    contract_id,
+    period_start,
+    period_end,
+    status,
+    started_at,
+    completed_at,
+    expected_count,
+    actual_count,
+    diff_count,
+    case_count,
+    leakage_amount_minor_units,
+    currency,
+    trace_id
+FROM reconciliation_runs
+WHERE (sqlc.narg(tenant_id) IS NULL OR tenant_id = sqlc.narg(tenant_id))
+  AND (sqlc.narg(contract_id) IS NULL OR contract_id = sqlc.narg(contract_id))
+ORDER BY started_at DESC
+LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
+
 -- name: CreateReconciliationRun :exec
 INSERT INTO reconciliation_runs (
     id,

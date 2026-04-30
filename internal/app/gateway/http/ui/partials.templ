@@ -1,0 +1,512 @@
+package ui
+
+templ TenantSelector(tenantID string) {
+	<section class="tenant-card" aria-label="Выбор tenant">
+		<div>
+			<span>Текущий клиент</span>
+			if tenantID == "" {
+				<strong>Tenant не выбран</strong>
+			} else {
+				<strong>{ tenantID }</strong>
+			}
+		</div>
+		<form class="tenant-form" action="/ui" method="get">
+			<label>
+				<span>Tenant ID</span>
+				<input name="tenant_id" value={ tenantID } placeholder="11111111-1111-1111-1111-111111111111"/>
+			</label>
+			<button class="button ghost compact-button" type="submit">Выбрать</button>
+		</form>
+	</section>
+}
+
+templ LeakageTrend() {
+	<div class="trend-chart" aria-label="Динамика утечек за период">
+		<div class="chart-scale">
+			<span>2k</span>
+			<span>1.5k</span>
+			<span>1k</span>
+			<span>500</span>
+			<span>0</span>
+		</div>
+		<div class="chart-area">
+			<svg viewBox="0 0 420 220" role="img" aria-label="Линейный график утечек">
+				<defs>
+					<linearGradient id="leakageLine" x1="0" x2="1" y1="0" y2="0">
+						<stop offset="0%" stop-color="#7ba7d9"></stop>
+						<stop offset="100%" stop-color="#2f6fb1"></stop>
+					</linearGradient>
+				</defs>
+				<g class="grid-lines">
+					<line x1="0" x2="420" y1="28" y2="28"></line>
+					<line x1="0" x2="420" y1="72" y2="72"></line>
+					<line x1="0" x2="420" y1="116" y2="116"></line>
+					<line x1="0" x2="420" y1="160" y2="160"></line>
+					<line x1="0" x2="420" y1="204" y2="204"></line>
+				</g>
+				<polyline class="trend-line" points="8,128 78,96 148,52 218,132 288,182 358,108 412,126"></polyline>
+				<g class="trend-points">
+					<circle cx="8" cy="128" r="4"></circle>
+					<circle cx="78" cy="96" r="4"></circle>
+					<circle cx="148" cy="52" r="4"></circle>
+					<circle cx="218" cy="132" r="4"></circle>
+					<circle cx="288" cy="182" r="4"></circle>
+					<circle cx="358" cy="108" r="4"></circle>
+					<circle cx="412" cy="126" r="4"></circle>
+				</g>
+			</svg>
+			<div class="chart-months">
+				<span>Дек</span>
+				<span>Янв</span>
+				<span>Фев</span>
+				<span>Мар</span>
+				<span>Апр</span>
+				<span>Май</span>
+			</div>
+		</div>
+	</div>
+	<div class="chart-note">Точки по последним сверкам. Используйте график для предварительного контроля динамики.</div>
+}
+
+templ RunForm(data RunFormData) {
+	<form class="run-form" hx-post="/ui/reconciliation/run" hx-target="#run-result" hx-swap="innerHTML">
+		<section class="form-section">
+			<h3>Контекст</h3>
+			<p class="hint">Tenant и контракт определяют набор условий, usage и invoice фактов для сверки.</p>
+			<div class="form-grid">
+				<label>
+					<span>Tenant ID</span>
+					<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
+				</label>
+				<label>
+					<span>Contract ID</span>
+					<input name="contract_id" value={ data.ContractID } placeholder="uuid контракта" required/>
+				</label>
+			</div>
+		</section>
+		<section class="form-section">
+			<h3>Период</h3>
+			<p class="hint">Период используется для поиска актуальных условий договора и фактов биллинга.</p>
+			<div class="form-grid">
+				<label>
+					<span>Начало периода</span>
+					<input type="date" name="period_start" value={ data.PeriodStart } required/>
+				</label>
+				<label>
+					<span>Конец периода</span>
+					<input type="date" name="period_end" value={ data.PeriodEnd } required/>
+				</label>
+			</div>
+		</section>
+		<section class="form-section">
+			<h3>Параметры</h3>
+			<div class="form-grid">
+				<label>
+					<span>Валюта</span>
+					<input name="currency" value={ data.Currency } placeholder="USD" required/>
+				</label>
+				<label>
+					<span>Минимальная утечка</span>
+					<input name="minimum_leakage_minor_units" value={ data.MinimumLeakageMinorUnits } inputmode="numeric" placeholder="0"/>
+					<small>В minor units: например, 2500 = USD 25.00.</small>
+				</label>
+			</div>
+		</section>
+		<section class="form-section">
+			<h3>Trace</h3>
+			<label>
+				<span>Trace ID</span>
+				<input name="trace_id" value={ data.TraceID } placeholder="ui-reconciliation"/>
+			</label>
+		</section>
+		<div class="form-actions sticky-actions">
+			<button class="button primary" type="submit">Запустить сверку</button>
+			<button class="button ghost" type="reset">Сбросить</button>
+		</div>
+	</form>
+	<div id="run-result" class="result-slot">
+		@ifError(data.Error)
+	</div>
+}
+
+templ RunResult(data RunResultData) {
+	<div class="run-result success">
+		@ifError(data.Error)
+		if data.Error == "" {
+			<div class="result-heading">
+				<div>
+					<p class="eyebrow">Сверка завершена</p>
+					<h3>{ data.RunID }</h3>
+				</div>
+			</div>
+			<div class="metric-grid compact-grid">
+				<article class="metric">
+					<span>Утечка</span>
+					<strong>{ data.LeakageLabel }</strong>
+				</article>
+				<article class="metric">
+					<span>Фактических записей</span>
+					<strong>{ data.ActualCount }</strong>
+				</article>
+				<article class="metric">
+					<span>Расхождений</span>
+					<strong>{ data.DiffCount }</strong>
+				</article>
+				<article class="metric">
+					<span>Кейсов</span>
+					<strong>{ data.CaseCount }</strong>
+				</article>
+			</div>
+			if len(data.Cases) > 0 {
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th>Кейс</th>
+								<th>Статус</th>
+								<th>Утечка</th>
+								<th>Уверенность</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, item := range data.Cases {
+								<tr>
+									<td data-label="Кейс"><a href={ item.DetailPath }>{ item.ID }</a></td>
+									<td data-label="Статус"><span class={ item.StatusClass }>{ item.Status }</span></td>
+									<td data-label="Утечка">{ item.LeakageLabel }</td>
+									<td data-label="Уверенность">{ item.ConfidenceLabel }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		}
+	</div>
+}
+
+templ RunsList(data RunsTableData) {
+	if len(data.Runs) == 0 {
+		<div class="empty">Запусков сверки пока нет.</div>
+	} else {
+		<div class="table-wrap runs-table">
+			<table>
+				<thead>
+					<tr>
+						<th>Название</th>
+						<th>Период</th>
+						<th>Статус</th>
+						<th>Утечка</th>
+						<th>Дата</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, run := range data.Runs {
+						<tr>
+							<td data-label="Название">
+								<strong>{ run.ContractID }</strong>
+								<small>запуск { run.ID }</small>
+							</td>
+							<td data-label="Период">{ run.PeriodLabel }</td>
+							<td data-label="Статус"><span class={ run.StatusClass }>{ run.Status }</span></td>
+							<td data-label="Утечка">{ run.LeakageLabel }</td>
+							<td data-label="Дата">{ run.StartedAt }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<div class="table-footer">
+				<a class="text-link" href="/ui/reconciliation">Смотреть все запуски</a>
+			</div>
+		</div>
+	}
+}
+
+templ RunsTable(data RunsTableData) {
+	@RunsList(data)
+}
+
+templ CaseFilters(data CasesTableData) {
+	<form class="filter-bar" action="/ui/cases" method="get">
+		<label>
+			<span>Статус</span>
+			<select name="status">
+				<option value="">Любой статус</option>
+				<option value="open" selected?={ data.Status == "open" }>Открыт</option>
+				<option value="investigating" selected?={ data.Status == "investigating" }>В работе</option>
+				<option value="resolved" selected?={ data.Status == "resolved" }>Решён</option>
+				<option value="dismissed" selected?={ data.Status == "dismissed" }>Отклонён</option>
+			</select>
+		</label>
+		<label>
+			<span>Tenant ID</span>
+			<input name="tenant_id" value={ data.TenantID } placeholder="uuid tenant" required/>
+		</label>
+		<label>
+			<span>Дата от</span>
+			<input type="date" name="date_from" value={ data.DateFrom }/>
+		</label>
+		<label>
+			<span>Дата до</span>
+			<input type="date" name="date_to" value={ data.DateTo }/>
+		</label>
+		<label>
+			<span>Важность</span>
+			<select name="severity">
+				<option value="">Любая важность</option>
+				<option value="low" selected?={ data.Severity == "low" }>Низкая</option>
+				<option value="medium" selected?={ data.Severity == "medium" }>Средняя</option>
+				<option value="high" selected?={ data.Severity == "high" }>Высокая</option>
+				<option value="critical" selected?={ data.Severity == "critical" }>Критическая</option>
+			</select>
+		</label>
+		<label class="filter-search">
+			<span>Поиск</span>
+			<input name="search" value={ data.Search } placeholder="case id, контракт, ответственный, trace"/>
+		</label>
+		<button class="button secondary" type="submit">Применить</button>
+	</form>
+}
+
+templ CasesCompactList(data CasesTableData) {
+	<div id="cases-table">
+		@ifError(data.Error)
+		if data.Error == "" && len(data.Cases) == 0 {
+			<div class="empty">{ data.EmptyMessage }</div>
+		}
+		if len(data.Cases) > 0 {
+			<div class="record-list">
+				for _, item := range data.Cases {
+					<article class="case-card">
+						<div class="record-main">
+							<div>
+								<a class="case-id" href={ item.DetailPath }>{ item.ID }</a>
+								<small>{ item.Type } · { item.PeriodLabel }</small>
+							</div>
+							<span class={ item.StatusClass }>{ item.Status }</span>
+						</div>
+						<div class="record-meta">
+							<span>
+								<small>Утечка</small>
+								<b>{ item.LeakageLabel }</b>
+							</span>
+							<span>
+								<small>Причина</small>
+								<b>{ item.RootCause }</b>
+							</span>
+							<span>
+								<small>Ответственный</small>
+								<b>{ item.Assignee }</b>
+							</span>
+						</div>
+					</article>
+				}
+			</div>
+		}
+	</div>
+}
+
+templ CasesTable(data CasesTableData) {
+	<div id="cases-table">
+		@ifError(data.Error)
+		if data.Error == "" && len(data.Cases) == 0 {
+			<div class="empty">{ data.EmptyMessage }</div>
+		}
+		if len(data.Cases) > 0 {
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Case ID</th>
+							<th>Статус</th>
+							<th>Утечка</th>
+							<th>Причина</th>
+							<th>Обновлён</th>
+							<th>Ответственный</th>
+							<th>Важность</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, item := range data.Cases {
+							<tr>
+								<td data-label="Case ID">
+									<a href={ item.DetailPath }>{ item.ID }</a>
+									<small>{ item.Type }</small>
+								</td>
+								<td data-label="Статус"><span class={ item.StatusClass }>{ item.Status }</span></td>
+								<td data-label="Утечка">{ item.LeakageLabel }</td>
+								<td data-label="Причина">{ item.RootCause }</td>
+								<td data-label="Обновлён">{ item.DetectedAt }</td>
+								<td data-label="Ответственный">{ item.Assignee }</td>
+								<td data-label="Важность"><span class={ item.SeverityClass }>{ item.Severity }</span></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+templ CasePreview(data CaseRow) {
+	<aside class="panel preview-card">
+		<div class="panel-heading">
+			<div>
+				<p class="eyebrow">Детали</p>
+				<h2>Предпросмотр кейса</h2>
+			</div>
+		</div>
+		if data.ID == "" {
+			<div class="empty">Выберите tenant или измените фильтры, чтобы увидеть кейс.</div>
+		} else {
+			<div class="preview-stack">
+				<a class="case-id large" href={ data.DetailPath }>{ data.ID }</a>
+				<div class="badge-row">
+					<span class={ data.StatusClass }>{ data.Status }</span>
+					<span class={ data.SeverityClass }>{ data.Severity }</span>
+				</div>
+				<dl class="detail-list">
+					<div>
+						<dt>Потенциальная утечка</dt>
+						<dd>{ data.LeakageLabel }</dd>
+					</div>
+					<div>
+						<dt>Причина</dt>
+						<dd>{ data.RootCause }</dd>
+					</div>
+					<div>
+						<dt>Ответственный</dt>
+						<dd>{ data.Assignee }</dd>
+					</div>
+					<div>
+						<dt>Обновлён</dt>
+						<dd>{ data.DetectedAt }</dd>
+					</div>
+				</dl>
+				<a class="button secondary full-width" href={ data.DetailPath }>Открыть кейс</a>
+			</div>
+		}
+	</aside>
+}
+
+templ CaseDetailPanel(data CaseDetailPanelData) {
+	<section id="case-detail" class="case-detail">
+		@ifError(data.Error)
+		if data.Error == "" {
+			<div class="panel wide">
+				<div class="panel-heading">
+					<div>
+						<p class="eyebrow">Кейс утечки</p>
+						<h1>{ data.Case.ID }</h1>
+						<p class="lede">{ data.Case.Type } · { data.Case.PeriodLabel }</p>
+					</div>
+					<span class={ data.Case.StatusClass }>{ data.Case.Status }</span>
+				</div>
+				<div class="metric-grid compact-grid">
+					<article class="metric">
+						<span>Ожидалось</span>
+						<strong>{ data.Case.ExpectedLabel }</strong>
+					</article>
+					<article class="metric">
+						<span>Факт</span>
+						<strong>{ data.Case.ActualLabel }</strong>
+					</article>
+					<article class="metric danger">
+						<span>Утечка</span>
+						<strong>{ data.Case.LeakageLabel }</strong>
+					</article>
+					<article class="metric">
+						<span>Уверенность</span>
+						<strong>{ data.Case.ConfidenceLabel }</strong>
+					</article>
+				</div>
+				<div class="split tight">
+					<form class="panel inset" hx-post={ "/ui/cases/" + data.Case.ID + "/status" } hx-target="#case-detail" hx-swap="outerHTML">
+						<h2>Жизненный цикл</h2>
+						<input type="hidden" name="tenant_id" value={ data.TenantID }/>
+						<label>
+							<span>Статус</span>
+							<select name="status">
+								for _, option := range data.StatusOptions {
+									if option.Selected {
+										<option value={ option.Value } selected>{ option.Label }</option>
+									} else {
+										<option value={ option.Value }>{ option.Label }</option>
+									}
+								}
+							</select>
+						</label>
+						<label>
+							<span>Кто изменил</span>
+							<input name="changed_by" value="billing-ops"/>
+						</label>
+						<label>
+							<span>Код причины</span>
+							<input name="reason_code" placeholder="invoice_corrected"/>
+						</label>
+						<label>
+							<span>Комментарий</span>
+							<textarea name="comment" rows="3" placeholder="Контекст решения"></textarea>
+						</label>
+						<button class="button" type="submit">Обновить статус</button>
+					</form>
+					<form class="panel inset" hx-post={ "/ui/cases/" + data.Case.ID + "/assignee" } hx-target="#case-detail" hx-swap="outerHTML">
+						<h2>Ответственный</h2>
+						<input type="hidden" name="tenant_id" value={ data.TenantID }/>
+						<label>
+							<span>Исполнитель</span>
+							<input name="assignee" value={ data.Case.Assignee } placeholder="billing-ops"/>
+						</label>
+						<button class="button secondary" type="submit">Назначить</button>
+					</form>
+				</div>
+			</div>
+			<section class="split">
+				<div class="panel">
+					<h2>Доказательства</h2>
+					if len(data.Evidence) == 0 {
+						<div class="empty">Доказательств пока нет.</div>
+					} else {
+						for _, item := range data.Evidence {
+							<article class="evidence-card">
+								<strong>{ item.Type }</strong>
+								<span>{ item.EntityType } · { item.EntityID }</span>
+								<pre>{ item.Payload }</pre>
+							</article>
+						}
+					}
+				</div>
+				<div class="panel">
+					<h2>Причины и история</h2>
+					if len(data.RootCauses) == 0 {
+						<div class="empty">Подтверждённых причин пока нет.</div>
+					} else {
+						for _, item := range data.RootCauses {
+							<article class="timeline-card">
+								<strong>{ item.Category }</strong>
+								<p>{ item.Description }</p>
+								<small>{ item.ConfidenceLabel } · { item.DerivedBy }</small>
+							</article>
+						}
+					}
+					if len(data.History) > 0 {
+						<h3>История статусов</h3>
+						for _, item := range data.History {
+							<article class="timeline-card">
+								<strong>{ item.FromStatus } -> { item.ToStatus }</strong>
+								<p>{ item.ReasonCode } { item.Comment }</p>
+								<small>{ item.ChangedAt } · { item.ChangedBy }</small>
+							</article>
+						}
+					}
+				</div>
+			</section>
+		}
+	</section>
+}
+
+templ ifError(message string) {
+	if message != "" {
+		<div class="alert">{ message }</div>
+	}
+}

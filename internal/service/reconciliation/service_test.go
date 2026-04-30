@@ -174,6 +174,13 @@ func (f *fakeStore) ListActualRevenue(
 	return f.actual, nil
 }
 
+func (f *fakeStore) ListReconciliationRuns(
+	ctx context.Context,
+	cmd ListReconciliationRunsCommand,
+) ([]ReconciliationRunSummary, error) {
+	return nil, nil
+}
+
 func (f *fakeStore) CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error {
 	f.createdRuns = append(f.createdRuns, run)
 	return nil

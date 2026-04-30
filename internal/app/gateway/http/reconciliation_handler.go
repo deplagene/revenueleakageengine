@@ -155,7 +155,16 @@ func parseUUID(field, raw string) (uuid.UUID, error) {
 }
 
 func parseTime(field, raw string) (time.Time, error) {
+	return parseDate(field, raw)
+}
+
+func parseDate(field, raw string) (time.Time, error) {
 	value, err := time.Parse(time.RFC3339Nano, raw)
+	if err == nil {
+		return value.UTC(), nil
+	}
+
+	value, err = time.Parse("2006-01-02", raw)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("parse %s: %w", field, err)
 	}

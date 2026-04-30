@@ -481,6 +481,25 @@ func optionalCaseStatus(raw string) (leakage.Status, error) {
 	return parseCaseStatus(raw)
 }
 
+func optionalCaseSeverity(raw string) (leakage.Severity, error) {
+	if raw == "" {
+		return "", nil
+	}
+
+	switch leakage.Severity(raw) {
+	case leakage.SeverityLow:
+		return leakage.SeverityLow, nil
+	case leakage.SeverityMedium:
+		return leakage.SeverityMedium, nil
+	case leakage.SeverityHigh:
+		return leakage.SeverityHigh, nil
+	case leakage.SeverityCritical:
+		return leakage.SeverityCritical, nil
+	default:
+		return "", fmt.Errorf("parse severity: invalid severity %q", raw)
+	}
+}
+
 func parseCaseStatus(raw string) (leakage.Status, error) {
 	switch leakage.Status(raw) {
 	case leakage.StatusOpen:

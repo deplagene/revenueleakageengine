@@ -88,6 +88,29 @@ func NewService(store Store, opts ...Option) (*Service, error) {
 	return service, nil
 }
 
+// ListReconciliationRuns loads recent reconciliation run summaries for UI and
+// operational read models.
+func (s *Service) ListReconciliationRuns(
+	ctx context.Context,
+	cmd ListReconciliationRunsCommand,
+) (ListReconciliationRunsResult, error) {
+	const op = "service.reconciliation.ListReconciliationRuns"
+
+	cmd = cmd.Normalize()
+	if err := cmd.Validate(); err != nil {
+		return ListReconciliationRunsResult{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	runs, err := s.store.ListReconciliationRuns(ctx, cmd)
+	if err != nil {
+		return ListReconciliationRunsResult{}, fmt.Errorf("%s: list runs: %w", op, err)
+	}
+
+	return ListReconciliationRunsResult{
+		Runs: runs,
+	}, nil
+}
+
 // ReconcilePeriod compares expected and actual revenue for one contract period,
 // detects leakage candidates, and persists resulting cases with evidence.
 func (s *Service) ReconcilePeriod(

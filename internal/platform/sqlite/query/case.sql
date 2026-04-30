@@ -23,6 +23,17 @@ FROM leakage_cases
 WHERE tenant_id = sqlc.arg(tenant_id)
   AND (sqlc.narg(contract_id) IS NULL OR contract_id = sqlc.narg(contract_id))
   AND (sqlc.narg(status) IS NULL OR status = sqlc.narg(status))
+  AND (sqlc.narg(severity) IS NULL OR severity = sqlc.narg(severity))
+  AND (sqlc.narg(detected_from) IS NULL OR detected_at >= sqlc.narg(detected_from))
+  AND (sqlc.narg(detected_to) IS NULL OR detected_at < sqlc.narg(detected_to))
+  AND (
+    sqlc.narg(search_query) IS NULL
+    OR id LIKE '%' || sqlc.narg(search_query) || '%'
+    OR contract_id LIKE '%' || sqlc.narg(search_query) || '%'
+    OR root_cause_category LIKE '%' || sqlc.narg(search_query) || '%'
+    OR assignee LIKE '%' || sqlc.narg(search_query) || '%'
+    OR trace_id LIKE '%' || sqlc.narg(search_query) || '%'
+  )
 ORDER BY detected_at DESC, id DESC
 LIMIT sqlc.arg(limit_count)
 OFFSET sqlc.arg(offset_count);

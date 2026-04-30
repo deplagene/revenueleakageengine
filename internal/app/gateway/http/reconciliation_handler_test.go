@@ -21,6 +21,8 @@ type stubReconciliationRunner struct {
 	result   appreconciliation.RunRevenueLeakageCheckResult
 	err      error
 	received appreconciliation.RunRevenueLeakageCheckCommand
+	runs     appreconciliation.ListReconciliationRunsResult
+	runsErr  error
 }
 
 func (s *stubReconciliationRunner) RunRevenueLeakageCheck(
@@ -29,6 +31,13 @@ func (s *stubReconciliationRunner) RunRevenueLeakageCheck(
 ) (appreconciliation.RunRevenueLeakageCheckResult, error) {
 	s.received = cmd
 	return s.result, s.err
+}
+
+func (s *stubReconciliationRunner) ListReconciliationRuns(
+	_ context.Context,
+	cmd appreconciliation.ListReconciliationRunsCommand,
+) (appreconciliation.ListReconciliationRunsResult, error) {
+	return s.runs, s.runsErr
 }
 
 type stubCaseQueries struct {

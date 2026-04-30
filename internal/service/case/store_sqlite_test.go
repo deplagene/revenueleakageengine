@@ -49,6 +49,44 @@ func TestSQLiteStoreListCases(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreListCasesFilters(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := openTestSQLite(t, ctx)
+
+	tenantID := uuid.New()
+	customerID := uuid.New()
+	contractID := uuid.New()
+	matchingCaseID := uuid.New()
+	otherCaseID := uuid.New()
+	seedCaseReferences(t, ctx, db, tenantID, customerID, contractID)
+	seedLeakageCaseWithID(t, ctx, db, matchingCaseID, tenantID, customerID, contractID)
+	seedLeakageCaseWithID(t, ctx, db, otherCaseID, tenantID, customerID, contractID)
+	updateLeakageCaseForFilters(t, ctx, db, otherCaseID)
+
+	store := NewSQLiteStore(db)
+	result, err := store.ListCases(ctx, ListCasesCommand{
+		TenantID:     tenantID,
+		Severity:     leakage.SeverityHigh,
+		DetectedFrom: time.Date(2026, time.April, 30, 0, 0, 0, 0, time.UTC),
+		DetectedTo:   time.Date(2026, time.May, 2, 0, 0, 0, 0, time.UTC),
+		Search:       "trace-1",
+		Limit:        10,
+	})
+	if err != nil {
+		t.Fatalf("ListCases() error = %v", err)
+	}
+
+	if got := len(result); got != 1 {
+		t.Fatalf("case count = %d, want 1", got)
+	}
+
+	if result[0].ID != matchingCaseID {
+		t.Fatalf("case id = %s, want %s", result[0].ID, matchingCaseID)
+	}
+}
+
 func TestSQLiteStoreGetCase(t *testing.T) {
 	t.Parallel()
 
@@ -382,6 +420,32 @@ func seedLeakageCaseWithID(
 	)
 	if err != nil {
 		t.Fatalf("seed leakage case: %v", err)
+	}
+}
+
+func updateLeakageCaseForFilters(t *testing.T, ctx context.Context, db *sql.DB, caseID uuid.UUID) {
+	t.Helper()
+
+	_, err := db.ExecContext(
+		ctx,
+		`UPDATE leakage_cases
+		SET severity = ?,
+			status = ?,
+			detected_at = ?,
+			root_cause_category = ?,
+			assignee = ?,
+			trace_id = ?
+		WHERE id = ?`,
+		"low",
+		"resolved",
+		"2026-04-01T10:00:00Z",
+		"manual_process_failure",
+		"billing-ops-2",
+		"trace-older",
+		caseID.String(),
+	)
+	if err != nil {
+		t.Fatalf("update leakage case filters fixture: %v", err)
 	}
 }
 

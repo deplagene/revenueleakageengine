@@ -26,6 +26,13 @@ func (n *noopReconciliationRunner) RunRevenueLeakageCheck(
 	return appreconciliation.RunRevenueLeakageCheckResult{}, nil
 }
 
+func (n *noopReconciliationRunner) ListReconciliationRuns(
+	_ context.Context,
+	_ appreconciliation.ListReconciliationRunsCommand,
+) (appreconciliation.ListReconciliationRunsResult, error) {
+	return appreconciliation.ListReconciliationRunsResult{}, nil
+}
+
 type recordingCaseQueries struct {
 	result       caseapp.ListCasesResult
 	err          error

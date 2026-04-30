@@ -42,6 +42,10 @@ type reconciliationRunner interface {
 		ctx context.Context,
 		cmd appreconciliation.RunRevenueLeakageCheckCommand,
 	) (appreconciliation.RunRevenueLeakageCheckResult, error)
+	ListReconciliationRuns(
+		ctx context.Context,
+		cmd appreconciliation.ListReconciliationRunsCommand,
+	) (appreconciliation.ListReconciliationRunsResult, error)
 }
 
 type caseQueries interface {
@@ -121,6 +125,8 @@ func NewHandler(
 
 // RegisterRoutes attaches API routes to the provided router.
 func (h *Handler) RegisterRoutes(router chi.Router) {
+	h.registerUIRoutes(router)
+
 	router.Route("/api/v1", func(router chi.Router) {
 		router.Post("/reconciliation/run", h.handleRunReconciliation)
 		router.Get("/cases", h.handleListCases)
