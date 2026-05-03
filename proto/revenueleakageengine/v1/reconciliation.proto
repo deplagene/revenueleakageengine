@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package revenueleakageengine.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/deplagene/revenueleakageengine/internal/gen/proto/revenueleakageengine/v1;revenueleakageenginev1";
+
+service ReconciliationService {
+  rpc Run(RunRequest) returns (RunResponse);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc ListCases(ListCasesRequest) returns (ListCasesResponse);
+}
+
+enum ReconciliationRunStatus {
+  RECONCILIATION_RUN_STATUS_UNSPECIFIED = 0;
+  RECONCILIATION_RUN_STATUS_RUNNING = 1;
+  RECONCILIATION_RUN_STATUS_COMPLETED = 2;
+}
+
+enum LeakageCaseStatus {
+  LEAKAGE_CASE_STATUS_UNSPECIFIED = 0;
+  LEAKAGE_CASE_STATUS_OPEN = 1;
+  LEAKAGE_CASE_STATUS_INVESTIGATING = 2;
+  LEAKAGE_CASE_STATUS_RESOLVED = 3;
+  LEAKAGE_CASE_STATUS_DISMISSED = 4;
+}
+
+enum LeakageSeverity {
+  LEAKAGE_SEVERITY_UNSPECIFIED = 0;
+  LEAKAGE_SEVERITY_LOW = 1;
+  LEAKAGE_SEVERITY_MEDIUM = 2;
+  LEAKAGE_SEVERITY_HIGH = 3;
+  LEAKAGE_SEVERITY_CRITICAL = 4;
+}
+
+message Money {
+  string currency = 1;
+  int64 minor_units = 2;
+}
+
+message BillingPeriod {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+message RunRequest {
+  string tenant_id = 1;
+  string contract_id = 2;
+  BillingPeriod period = 3;
+  string currency = 4;
+  int64 minimum_leakage_minor_units = 5;
+  string run_id = 6;
+  string trace_id = 7;
+}
+
+message RunResponse {
+  string run_id = 1;
+  string expected_entry_id = 2;
+  int64 actual_entry_count = 3;
+  int64 diff_count = 4;
+  int64 case_count = 5;
+  Money leakage_amount = 6;
+  repeated LeakageCase cases = 7;
+}
+
+message GetRunRequest {
+  string tenant_id = 1;
+  string run_id = 2;
+}
+
+message GetRunResponse {
+  ReconciliationRun run = 1;
+}
+
+message ListCasesRequest {
+  string tenant_id = 1;
+  string contract_id = 2;
+  LeakageCaseStatus status = 3;
+  LeakageSeverity severity = 4;
+  google.protobuf.Timestamp detected_from = 5;
+  google.protobuf.Timestamp detected_to = 6;
+  string search = 7;
+  int32 limit = 8;
+  int32 offset = 9;
+}
+
+message ListCasesResponse {
+  repeated LeakageCase cases = 1;
+}
+
+message ReconciliationRun {
+  string id = 1;
+  string tenant_id = 2;
+  string contract_id = 3;
+  BillingPeriod period = 4;
+  ReconciliationRunStatus status = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  int64 expected_count = 8;
+  int64 actual_count = 9;
+  int64 diff_count = 10;
+  int64 case_count = 11;
+  Money leakage_amount = 12;
+  string trace_id = 13;
+}
+
+message LeakageCase {
+  string id = 1;
+  string tenant_id = 2;
+  string customer_id = 3;
+  string contract_id = 4;
+  string reconciliation_run_id = 5;
+  string type = 6;
+  LeakageSeverity severity = 7;
+  LeakageCaseStatus status = 8;
+  google.protobuf.Timestamp detected_at = 9;
+  BillingPeriod period = 10;
+  Money expected_amount = 11;
+  Money actual_amount = 12;
+  Money leakage_amount = 13;
+  int32 confidence_basis_points = 14;
+  string root_cause_category = 15;
+  string assignee = 16;
+  string trace_id = 17;
+}

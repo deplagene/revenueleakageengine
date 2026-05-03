@@ -59,6 +59,26 @@ func (s *SQLiteStore) ListReconciliationRuns(
 	return runs, nil
 }
 
+// GetReconciliationRun loads one reconciliation run summary in tenant scope.
+func (s *SQLiteStore) GetReconciliationRun(
+	ctx context.Context,
+	cmd GetReconciliationRunCommand,
+) (ReconciliationRunSummary, error) {
+	row, err := s.queries.GetReconciliationRun(ctx, sqlitedb.GetReconciliationRunParams{
+		ID:       cmd.RunID.String(),
+		TenantID: cmd.TenantID.String(),
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ReconciliationRunSummary{}, ErrRunNotFound
+		}
+
+		return ReconciliationRunSummary{}, fmt.Errorf("get reconciliation run: %w", err)
+	}
+
+	return reconciliationRunSummaryFromRow(row)
+}
+
 // CreateReconciliationRun stores the initial run record before matching starts.
 func (s *SQLiteStore) CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error {
 	currency := run.Currency

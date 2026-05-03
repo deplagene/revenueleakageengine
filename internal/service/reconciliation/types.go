@@ -28,6 +28,11 @@ var (
 	// ErrLimitInvalid reports that a read-model query has an unsupported page
 	// size.
 	ErrLimitInvalid = errors.New("limit must be between 1 and 100")
+	// ErrRunIDRequired reports that a reconciliation run lookup has no run id.
+	ErrRunIDRequired = errors.New("run id is required")
+	// ErrRunNotFound reports that the requested reconciliation run does not
+	// exist in the requested tenant scope.
+	ErrRunNotFound = errors.New("reconciliation run not found")
 )
 
 const (
@@ -150,6 +155,31 @@ type ReconciliationRunSummary struct {
 	CaseCount     int64
 	LeakageAmount valueobject.Money
 	TraceID       string
+}
+
+// GetReconciliationRunCommand requests one reconciliation run by tenant scope
+// and run id.
+type GetReconciliationRunCommand struct {
+	TenantID uuid.UUID
+	RunID    uuid.UUID
+}
+
+// Validate checks that the lookup is scoped and points to a concrete run.
+func (c GetReconciliationRunCommand) Validate() error {
+	if c.TenantID == uuid.Nil {
+		return ErrTenantRequired
+	}
+
+	if c.RunID == uuid.Nil {
+		return ErrRunIDRequired
+	}
+
+	return nil
+}
+
+// GetReconciliationRunResult contains one reconciliation run summary.
+type GetReconciliationRunResult struct {
+	Run ReconciliationRunSummary
 }
 
 // MatchKey identifies the reconciliation unit used to compare expected and

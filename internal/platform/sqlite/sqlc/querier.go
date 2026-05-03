@@ -23,6 +23,7 @@ type Querier interface {
 	GetContract(ctx context.Context, id string) (Contract, error)
 	GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoiceBySourceExternalParams) (Invoice, error)
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
+	GetReconciliationRun(ctx context.Context, arg GetReconciliationRunParams) (ReconciliationRun, error)
 	ListActualRevenueByContractPeriod(ctx context.Context, arg ListActualRevenueByContractPeriodParams) ([]ActualRevenueEntry, error)
 	ListBillableItems(ctx context.Context, tenantID string) ([]BillableItem, error)
 	ListCaseStatusHistoryByCase(ctx context.Context, caseID string) ([]CaseStatusHistory, error)

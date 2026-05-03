@@ -181,6 +181,13 @@ func (f *fakeStore) ListReconciliationRuns(
 	return nil, nil
 }
 
+func (f *fakeStore) GetReconciliationRun(
+	ctx context.Context,
+	cmd GetReconciliationRunCommand,
+) (ReconciliationRunSummary, error) {
+	return ReconciliationRunSummary{}, nil
+}
+
 func (f *fakeStore) CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error {
 	f.createdRuns = append(f.createdRuns, run)
 	return nil

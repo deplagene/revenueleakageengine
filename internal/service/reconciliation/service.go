@@ -111,6 +111,28 @@ func (s *Service) ListReconciliationRuns(
 	}, nil
 }
 
+// GetReconciliationRun loads one reconciliation run summary for UI and
+// machine-to-machine read models.
+func (s *Service) GetReconciliationRun(
+	ctx context.Context,
+	cmd GetReconciliationRunCommand,
+) (GetReconciliationRunResult, error) {
+	const op = "service.reconciliation.GetReconciliationRun"
+
+	if err := cmd.Validate(); err != nil {
+		return GetReconciliationRunResult{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	run, err := s.store.GetReconciliationRun(ctx, cmd)
+	if err != nil {
+		return GetReconciliationRunResult{}, fmt.Errorf("%s: get run: %w", op, err)
+	}
+
+	return GetReconciliationRunResult{
+		Run: run,
+	}, nil
+}
+
 // ReconcilePeriod compares expected and actual revenue for one contract period,
 // detects leakage candidates, and persists resulting cases with evidence.
 func (s *Service) ReconcilePeriod(

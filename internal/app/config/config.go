@@ -10,6 +10,7 @@ import (
 // Config represents the application configuration.
 type Config struct {
 	HTTP       HTTPConfig
+	GRPC       GRPCConfig
 	SQLite     SQLiteConfig
 	Migrations MigrationConfig
 	Logging    LoggingConfig
@@ -24,6 +25,12 @@ type HTTPConfig struct {
 	ShutdownTimeout   time.Duration
 	RateLimit         int
 	RateLimitWindow   time.Duration
+}
+
+// GRPCConfig holds gRPC server settings.
+type GRPCConfig struct {
+	Addr            string
+	ShutdownTimeout time.Duration
 }
 
 // SQLiteConfig holds SQLite database settings.
@@ -53,6 +60,10 @@ func Load() Config {
 			ShutdownTimeout:   10 * time.Second,
 			RateLimit:         100,
 			RateLimitWindow:   time.Minute,
+		},
+		GRPC: GRPCConfig{
+			Addr:            ":9090",
+			ShutdownTimeout: 10 * time.Second,
 		},
 		SQLite: SQLiteConfig{
 			Path: "./local.db",

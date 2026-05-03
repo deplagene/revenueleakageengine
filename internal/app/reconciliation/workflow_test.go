@@ -363,6 +363,17 @@ func (s *workflowStore) ListReconciliationRuns(
 	return nil, nil
 }
 
+func (s *workflowStore) GetReconciliationRun(
+	ctx context.Context,
+	cmd reconciliationservice.GetReconciliationRunCommand,
+) (reconciliationservice.ReconciliationRunSummary, error) {
+	if err := ctx.Err(); err != nil {
+		return reconciliationservice.ReconciliationRunSummary{}, err
+	}
+
+	return reconciliationservice.ReconciliationRunSummary{}, nil
+}
+
 func (s *workflowStore) CreateReconciliationRun(
 	ctx context.Context,
 	run reconciliationservice.ReconciliationRun,

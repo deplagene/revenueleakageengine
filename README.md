@@ -27,6 +27,8 @@ task test-integration
 task build
 task run
 task sqlc-generate
+task proto:lint
+task proto:gen
 task ui-deps
 task templ-generate
 task templ-watch
@@ -34,7 +36,7 @@ task migrate-up
 ```
 
 `task run` открывает SQLite базу `./local.db`, применяет миграции
-и поднимает HTTP API на `:8080`.
+и поднимает HTTP API на `:8080` и gRPC API на `:9090`.
 Операционный server-rendered UI доступен на `http://localhost:8080/ui`.
 
 UI использует `templ` для HTML-компонентов и локальный `htmx` asset из
@@ -44,6 +46,11 @@ UI использует `templ` для HTML-компонентов и локал
 доступен на `http://localhost:8081`, а приложение запускается через `task run`.
 Миграции выполняются через `task migrate-up`; Taskfile сам установит `goose` в
 `bin/goose`, если бинаря еще нет.
+
+gRPC контракты лежат в `proto/revenueleakageengine/v1`, а сгенерированный Go-код
+попадает в `internal/gen/proto/revenueleakageengine/v1`. Проверка и генерация
+выполняются через `task proto:lint` и `task proto:gen`; Taskfile сам установит
+`buf`, `protoc-gen-go` и `protoc-gen-go-grpc` в `bin/`.
 
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 
