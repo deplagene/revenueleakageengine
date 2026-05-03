@@ -64,6 +64,27 @@ WHERE (sqlc.narg(tenant_id) IS NULL OR tenant_id = sqlc.narg(tenant_id))
 ORDER BY started_at DESC
 LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
+-- name: GetReconciliationRun :one
+SELECT
+    id,
+    tenant_id,
+    contract_id,
+    period_start,
+    period_end,
+    status,
+    started_at,
+    completed_at,
+    expected_count,
+    actual_count,
+    diff_count,
+    case_count,
+    leakage_amount_minor_units,
+    currency,
+    trace_id
+FROM reconciliation_runs
+WHERE id = sqlc.arg(id)
+  AND tenant_id = sqlc.arg(tenant_id);
+
 -- name: CreateReconciliationRun :exec
 INSERT INTO reconciliation_runs (
     id,

@@ -10,6 +10,9 @@ vars:
   TEMPL_VERSION: "v0.3.1001"
   HTMX_VERSION: "2.0.7"
   GOOSE_VERSION: "v3.27.0"
+  BUF_VERSION: "v1.68.4"
+  PROTOC_GEN_GO_VERSION: "v1.36.11"
+  PROTOC_GEN_GO_GRPC_VERSION: "v1.6.1"
 
   DB_PATH: "./local.db"
 
@@ -21,6 +24,9 @@ vars:
   SWAG: "{{.BIN_DIR}}/swag"
   TEMPL: "{{.BIN_DIR}}/templ"
   GOOSE: "{{.BIN_DIR}}/goose"
+  BUF: "{{.BIN_DIR}}/buf"
+  PROTOC_GEN_GO: "{{.BIN_DIR}}/protoc-gen-go"
+  PROTOC_GEN_GO_GRPC: "{{.BIN_DIR}}/protoc-gen-go-grpc"
   HTMX: "{{.ROOT_DIR}}/internal/app/gateway/http/static/htmx.min.js"
 
 tasks:
@@ -49,10 +55,10 @@ tasks:
         {{.TEMPL}} fmt .
       - |
         echo "🧼 Форматируем через gofumpt ..."
-        find . -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GOFUMPT}} -extra -w {} +
+        find . -type f -name '*.go' ! -path '*/mocks/*' ! -path './internal/gen/proto/*' -exec {{.GOFUMPT}} -extra -w {} +
       - |
         echo "🎯 Сортируем импорты через gci ..."
-        find . -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GCI}} write -s standard -s default {} +
+        find . -type f -name '*.go' ! -path '*/mocks/*' ! -path './internal/gen/proto/*' -exec {{.GCI}} write -s standard -s default {} +
 
   install-golangci-lint:
     desc: "Устанавливает golangci-lint в каталог bin"
@@ -132,6 +138,60 @@ tasks:
     status:
       - test -x {{.GOOSE}}
 
+  install-buf:
+    desc: "Устанавливает buf в каталог bin"
+    cmds:
+      - |
+        expected="{{.BUF_VERSION}}"
+        expected="${expected#v}"
+        [ -x {{.BUF}} ] && [ "$({{.BUF}} --version)" = "$expected" ] || {
+          mkdir -p {{.BIN_DIR}}
+          echo "📦 Устанавливаем buf {{.BUF_VERSION}}..."
+          GOBIN={{.BIN_DIR}} go install github.com/bufbuild/buf/cmd/buf@{{.BUF_VERSION}}
+        }
+    status:
+      - |
+        expected="{{.BUF_VERSION}}"
+        expected="${expected#v}"
+        test -x {{.BUF}} && [ "$({{.BUF}} --version)" = "$expected" ]
+
+  proto:install-plugins:
+    desc: "Устанавливает protoc плагины в каталог bin"
+    cmds:
+      - |
+        [ -x {{.PROTOC_GEN_GO}} ] && {{.PROTOC_GEN_GO}} --version | grep -q " {{.PROTOC_GEN_GO_VERSION}}$" || {
+          mkdir -p {{.BIN_DIR}}
+          echo "📦 Устанавливаем protoc-gen-go {{.PROTOC_GEN_GO_VERSION}}..."
+          GOBIN={{.BIN_DIR}} go install google.golang.org/protobuf/cmd/protoc-gen-go@{{.PROTOC_GEN_GO_VERSION}}
+        }
+        expected_grpc="{{.PROTOC_GEN_GO_GRPC_VERSION}}"
+        expected_grpc="${expected_grpc#v}"
+        [ -x {{.PROTOC_GEN_GO_GRPC}} ] && {{.PROTOC_GEN_GO_GRPC}} --version | grep -q " $expected_grpc$" || {
+          mkdir -p {{.BIN_DIR}}
+          echo "📦 Устанавливаем protoc-gen-go-grpc {{.PROTOC_GEN_GO_GRPC_VERSION}}..."
+          GOBIN={{.BIN_DIR}} go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@{{.PROTOC_GEN_GO_GRPC_VERSION}}
+        }
+    status:
+      - test -x {{.PROTOC_GEN_GO}} && {{.PROTOC_GEN_GO}} --version | grep -q " {{.PROTOC_GEN_GO_VERSION}}$"
+      - |
+        expected_grpc="{{.PROTOC_GEN_GO_GRPC_VERSION}}"
+        expected_grpc="${expected_grpc#v}"
+        test -x {{.PROTOC_GEN_GO_GRPC}} && {{.PROTOC_GEN_GO_GRPC}} --version | grep -q " $expected_grpc$"
+
+  proto:lint:
+    desc: "Проверяет .proto-файлы через buf"
+    deps: [install-buf, proto:install-plugins]
+    dir: proto
+    cmds:
+      - "{{.BUF}} lint"
+
+  proto:gen:
+    desc: "Генерирует Go-код из .proto"
+    deps: [proto:lint]
+    dir: proto
+    cmds:
+      - "PATH={{.BIN_DIR}}:$PATH {{.BUF}} generate"
+
   install-templ:
     desc: "Устанавливает templ CLI в каталог bin"
     cmds:
@@ -163,6 +223,13 @@ tasks:
       - |
         mkdir -p .cache/go-build
         GOCACHE={{.ROOT_DIR}}/.cache/go-build go get github.com/a-h/templ@{{.TEMPL_VERSION}}
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go mod tidy
+
+  go-mod-tidy:
+    desc: "Синхронизирует go.mod и go.sum"
+    cmds:
       - |
         mkdir -p .cache/go-build
         GOCACHE={{.ROOT_DIR}}/.cache/go-build go mod tidy

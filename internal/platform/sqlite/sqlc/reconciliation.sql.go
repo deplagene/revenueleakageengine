@@ -253,6 +253,56 @@ func (q *Queries) CreateReconciliationRun(ctx context.Context, arg CreateReconci
 	return err
 }
 
+const getReconciliationRun = `-- name: GetReconciliationRun :one
+SELECT
+    id,
+    tenant_id,
+    contract_id,
+    period_start,
+    period_end,
+    status,
+    started_at,
+    completed_at,
+    expected_count,
+    actual_count,
+    diff_count,
+    case_count,
+    leakage_amount_minor_units,
+    currency,
+    trace_id
+FROM reconciliation_runs
+WHERE id = ?1
+  AND tenant_id = ?2
+`
+
+type GetReconciliationRunParams struct {
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+}
+
+func (q *Queries) GetReconciliationRun(ctx context.Context, arg GetReconciliationRunParams) (ReconciliationRun, error) {
+	row := q.db.QueryRowContext(ctx, getReconciliationRun, arg.ID, arg.TenantID)
+	var i ReconciliationRun
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.ContractID,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.Status,
+		&i.StartedAt,
+		&i.CompletedAt,
+		&i.ExpectedCount,
+		&i.ActualCount,
+		&i.DiffCount,
+		&i.CaseCount,
+		&i.LeakageAmountMinorUnits,
+		&i.Currency,
+		&i.TraceID,
+	)
+	return i, err
+}
+
 const listActualRevenueByContractPeriod = `-- name: ListActualRevenueByContractPeriod :many
 SELECT
     id,

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,11 +16,13 @@ import (
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
 	"github.com/deplagene/revenueleakageengine/internal/app/config"
 	contractapp "github.com/deplagene/revenueleakageengine/internal/app/contract"
+	gatewaygrpc "github.com/deplagene/revenueleakageengine/internal/app/gateway/grpc"
 	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
 	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
+	platformgrpc "github.com/deplagene/revenueleakageengine/internal/platform/grpc"
 	"github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
 	casework "github.com/deplagene/revenueleakageengine/internal/service/case"
 	contractwork "github.com/deplagene/revenueleakageengine/internal/service/contract"
@@ -29,6 +32,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 	"github.com/theartofdevel/logging"
+	googlegrpc "google.golang.org/grpc"
 )
 
 // main is the process entrypoint.
@@ -91,10 +95,32 @@ func run() (err error) {
 		return fmt.Errorf("build http handler: %w", err)
 	}
 
-	server := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
-	errCh := startHTTPServer(server, logger)
+	grpcHandler, err := gatewaygrpc.NewHandler(reconciliationWorkflow, caseQueries)
+	if err != nil {
+		return fmt.Errorf("build grpc handler: %w", err)
+	}
 
-	return waitForShutdown(ctx, server, cfg.HTTP.ShutdownTimeout, errCh, logger)
+	grpcServer := platformgrpc.NewServer()
+	grpcHandler.Register(grpcServer)
+	platformgrpc.RegisterHealthCheck(grpcServer)
+
+	httpServer := newHTTPServer(cfg.HTTP, newRouter(logger, cfg.HTTP, httpHandler))
+	httpErrCh := startHTTPServer(httpServer, logger)
+	grpcErrCh, err := startGRPCServer(grpcServer, cfg.GRPC, logger)
+	if err != nil {
+		return err
+	}
+
+	return waitForShutdown(
+		ctx,
+		httpServer,
+		grpcServer,
+		cfg.HTTP.ShutdownTimeout,
+		cfg.GRPC.ShutdownTimeout,
+		httpErrCh,
+		grpcErrCh,
+		logger,
+	)
 }
 
 func newLogger(cfg config.LoggingConfig) *logging.Logger {
@@ -212,11 +238,38 @@ func startHTTPServer(server *http.Server, logger *logging.Logger) <-chan error {
 	return errCh
 }
 
+func startGRPCServer(
+	server *googlegrpc.Server,
+	cfg config.GRPCConfig,
+	logger *logging.Logger,
+) (<-chan error, error) {
+	listener, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("listen grpc: %w", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("grpc server starting", "addr", cfg.Addr)
+		if err := server.Serve(listener); err != nil {
+			errCh <- fmt.Errorf("serve grpc: %w", err)
+			return
+		}
+
+		errCh <- nil
+	}()
+
+	return errCh, nil
+}
+
 func waitForShutdown(
 	ctx context.Context,
-	server *http.Server,
-	shutdownTimeout time.Duration,
-	errCh <-chan error,
+	httpServer *http.Server,
+	grpcServer *googlegrpc.Server,
+	httpShutdownTimeout time.Duration,
+	grpcShutdownTimeout time.Duration,
+	httpErrCh <-chan error,
+	grpcErrCh <-chan error,
 	logger *logging.Logger,
 ) error {
 	signalCh := make(chan os.Signal, 1)
@@ -224,25 +277,59 @@ func waitForShutdown(
 	defer signal.Stop(signalCh)
 
 	select {
-	case err := <-errCh:
+	case err := <-httpErrCh:
+		return err
+	case err := <-grpcErrCh:
 		return err
 	case signalValue := <-signalCh:
 		logger.Info("shutdown signal received", "signal", signalValue.String())
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, shutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(ctx, httpShutdownTimeout)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutdown http server: %w", err)
+	var shutdownErr error
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		shutdownErr = errors.Join(shutdownErr, fmt.Errorf("shutdown http server: %w", err))
 	}
 
-	if err := <-errCh; err != nil {
-		return err
+	if err := stopGRPCServer(grpcServer, grpcShutdownTimeout); err != nil {
+		shutdownErr = errors.Join(shutdownErr, err)
 	}
 
-	logger.Info("http server stopped")
+	if err := <-httpErrCh; err != nil {
+		shutdownErr = errors.Join(shutdownErr, err)
+	}
+
+	if err := <-grpcErrCh; err != nil {
+		shutdownErr = errors.Join(shutdownErr, err)
+	}
+
+	if shutdownErr != nil {
+		return shutdownErr
+	}
+
+	logger.Info("servers stopped")
 	return nil
+}
+
+func stopGRPCServer(server *googlegrpc.Server, timeout time.Duration) error {
+	stopped := make(chan struct{})
+	go func() {
+		server.GracefulStop()
+		close(stopped)
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-stopped:
+		return nil
+	case <-timer.C:
+		server.Stop()
+		return errors.New("grpc graceful stop timed out")
+	}
 }
 
 func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Commands, error) {

@@ -29,6 +29,7 @@ type Store interface {
 		ctx context.Context,
 		cmd ListReconciliationRunsCommand,
 	) ([]ReconciliationRunSummary, error)
+	GetReconciliationRun(ctx context.Context, cmd GetReconciliationRunCommand) (ReconciliationRunSummary, error)
 	CreateReconciliationRun(ctx context.Context, run ReconciliationRun) error
 	CompleteReconciliationRun(ctx context.Context, run ReconciliationRun) error
 	CreateLeakageCase(ctx context.Context, c leakage.Case, evidence []leakage.Evidence) error
