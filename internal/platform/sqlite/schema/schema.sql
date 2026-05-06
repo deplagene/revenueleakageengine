@@ -365,17 +365,35 @@ CREATE INDEX root_causes_case_idx
 
 CREATE TABLE outbox_events (
     id TEXT PRIMARY KEY,
-    tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
-    aggregate_type TEXT NOT NULL,
-    aggregate_id TEXT NOT NULL,
     topic TEXT NOT NULL,
-    message_key TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    contract_id TEXT,
+    partition_key TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     headers_json TEXT NOT NULL DEFAULT '{}',
     status TEXT NOT NULL,
-    occurred_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    available_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
     published_at TEXT
 );
 
-CREATE INDEX outbox_events_status_occurred_idx
-    ON outbox_events(status, occurred_at);
+CREATE INDEX outbox_events_pending_idx
+    ON outbox_events(status, available_at, created_at);
+
+CREATE INDEX outbox_events_tenant_created_idx
+    ON outbox_events(tenant_id, created_at);
+
+CREATE TABLE inbox_events (
+    event_id TEXT NOT NULL,
+    handler TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    source_key TEXT NOT NULL DEFAULT '',
+    processed_at TEXT NOT NULL,
+    PRIMARY KEY (event_id, handler)
+);
+
+CREATE INDEX inbox_events_topic_processed_idx
+    ON inbox_events(topic, processed_at);
