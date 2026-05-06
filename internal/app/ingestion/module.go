@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
 	"github.com/google/uuid"
@@ -27,18 +29,48 @@ var (
 
 // Commands orchestrates data ingestion.
 type Commands struct {
-	store Store
+	store  Store
+	events eventSink
+	now    func() time.Time
+}
+
+type eventSink interface {
+	Append(ctx context.Context, envelope appevent.Envelope) error
+	AppendBatch(ctx context.Context, envelopes []appevent.Envelope) error
+}
+
+type CommandsOption func(*Commands)
+
+func WithEventSink(events eventSink) CommandsOption {
+	return func(c *Commands) {
+		c.events = events
+	}
+}
+
+func WithClock(now func() time.Time) CommandsOption {
+	return func(c *Commands) {
+		if now != nil {
+			c.now = now
+		}
+	}
 }
 
 // NewCommands creates a new commands handler.
-func NewCommands(store Store) (*Commands, error) {
+func NewCommands(store Store, opts ...CommandsOption) (*Commands, error) {
 	if store == nil {
 		return nil, ErrStoreRequired
 	}
 
-	return &Commands{
+	commands := &Commands{
 		store: store,
-	}, nil
+		now:   time.Now,
+	}
+
+	for _, opt := range opts {
+		opt(commands)
+	}
+
+	return commands, nil
 }
 
 // IngestUsageRecords handles a batch of usage records.
@@ -69,6 +101,10 @@ func (c *Commands) IngestUsageRecords(ctx context.Context, records []billing.Usa
 
 	if err := c.store.UpsertUsageRecords(ctx, normalized); err != nil {
 		return fmt.Errorf("%s: upsert usage records: %w", op, err)
+	}
+
+	if err := c.publishUsageRecordsIngested(ctx, normalized); err != nil {
+		return fmt.Errorf("%s: publish usage records ingested: %w", op, err)
 	}
 
 	return nil
@@ -115,6 +151,10 @@ func (c *Commands) IngestInvoice(ctx context.Context, invoice billing.Invoice, l
 
 	if err := c.store.UpsertInvoice(ctx, invoice, normalizedLines); err != nil {
 		return fmt.Errorf("%s: upsert invoice: %w", op, err)
+	}
+
+	if err := c.publishInvoiceIngested(ctx, invoice, normalizedLines); err != nil {
+		return fmt.Errorf("%s: publish invoice ingested: %w", op, err)
 	}
 
 	return nil

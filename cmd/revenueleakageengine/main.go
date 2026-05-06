@@ -16,10 +16,12 @@ import (
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
 	"github.com/deplagene/revenueleakageengine/internal/app/config"
 	contractapp "github.com/deplagene/revenueleakageengine/internal/app/contract"
+	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	gatewaygrpc "github.com/deplagene/revenueleakageengine/internal/app/gateway/grpc"
 	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
 	httpmiddleware "github.com/deplagene/revenueleakageengine/internal/app/gateway/middleware"
 	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
+	"github.com/deplagene/revenueleakageengine/internal/app/outbox"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
 	platformgrpc "github.com/deplagene/revenueleakageengine/internal/platform/grpc"
@@ -34,6 +36,11 @@ import (
 	"github.com/theartofdevel/logging"
 	googlegrpc "google.golang.org/grpc"
 )
+
+type eventSink interface {
+	Append(ctx context.Context, envelope appevent.Envelope) error
+	AppendBatch(ctx context.Context, envelopes []appevent.Envelope) error
+}
 
 // main is the process entrypoint.
 func main() {
@@ -68,12 +75,17 @@ func run() (err error) {
 		return err
 	}
 
-	ingestionCommands, ingestionQueries, err := buildIngestionUseCases(db)
+	outboxStore, err := outbox.NewSQLiteStore(db)
+	if err != nil {
+		return fmt.Errorf("build outbox store: %w", err)
+	}
+
+	ingestionCommands, ingestionQueries, err := buildIngestionUseCases(db, outboxStore)
 	if err != nil {
 		return err
 	}
 
-	reconciliationWorkflow, err := buildReconciliationWorkflow(db, contractQueries, ingestionQueries)
+	reconciliationWorkflow, err := buildReconciliationWorkflow(db, contractQueries, ingestionQueries, outboxStore)
 	if err != nil {
 		return err
 	}
@@ -134,6 +146,7 @@ func buildReconciliationWorkflow(
 	db *sql.DB,
 	contractQueries appreconciliation.ContractQueries,
 	ingestionQueries appreconciliation.IngestionQueries,
+	events eventSink,
 ) (*appreconciliation.RevenueLeakageWorkflow, error) {
 	revenueStore := revenueservice.NewSQLiteStore(db)
 	revenueService := revenueservice.NewService(
@@ -151,6 +164,7 @@ func buildReconciliationWorkflow(
 		reconciliationService,
 		contractQueries,
 		ingestionQueries,
+		appreconciliation.WithEventSink(events),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build reconciliation workflow: %w", err)
@@ -345,9 +359,9 @@ func buildContractUseCases(db *sql.DB) (*contractapp.Queries, *contractapp.Comma
 	return queries, commands, nil
 }
 
-func buildIngestionUseCases(db *sql.DB) (*ingestionapp.Commands, *ingestionapp.Queries, error) {
+func buildIngestionUseCases(db *sql.DB, events eventSink) (*ingestionapp.Commands, *ingestionapp.Queries, error) {
 	store := ingestionapp.NewSQLiteStore(db)
-	commands, err := ingestionapp.NewCommands(store)
+	commands, err := ingestionapp.NewCommands(store, ingestionapp.WithEventSink(events))
 	if err != nil {
 		return nil, nil, fmt.Errorf("build ingestion commands: %w", err)
 	}

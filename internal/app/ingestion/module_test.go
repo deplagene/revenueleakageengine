@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
 	"github.com/google/uuid"
@@ -126,6 +127,65 @@ func TestCommandsIngestInvoiceNormalizesAndGeneratesIDs(t *testing.T) {
 	}
 }
 
+func TestCommandsIngestUsageRecordsPublishesOutboxEvents(t *testing.T) {
+	t.Parallel()
+
+	events := &recordingEventSink{}
+	commands, err := NewCommands(
+		&recordingStore{},
+		WithEventSink(events),
+		WithClock(func() time.Time {
+			return time.Date(2026, time.May, 1, 10, 0, 0, 0, time.UTC)
+		}),
+	)
+	if err != nil {
+		t.Fatalf("NewCommands() error = %v", err)
+	}
+
+	if err := commands.IngestUsageRecords(context.Background(), []billing.UsageRecord{validUsageRecord()}); err != nil {
+		t.Fatalf("IngestUsageRecords() error = %v", err)
+	}
+
+	if got := len(events.envelopes); got != 1 {
+		t.Fatalf("event count = %d, want 1", got)
+	}
+
+	envelope := events.envelopes[0]
+	if envelope.Topic != appevent.TopicUsageRecordsV1 {
+		t.Fatalf("topic = %q, want %q", envelope.Topic, appevent.TopicUsageRecordsV1)
+	}
+	if envelope.Type != appevent.TypeUsageRecordsIngested {
+		t.Fatalf("type = %q, want %q", envelope.Type, appevent.TypeUsageRecordsIngested)
+	}
+}
+
+func TestCommandsIngestInvoicePublishesOutboxEvent(t *testing.T) {
+	t.Parallel()
+
+	events := &recordingEventSink{}
+	commands, err := NewCommands(&recordingStore{}, WithEventSink(events))
+	if err != nil {
+		t.Fatalf("NewCommands() error = %v", err)
+	}
+
+	invoice := validInvoice(t)
+	if err := commands.IngestInvoice(context.Background(), invoice, []billing.InvoiceLine{validInvoiceLine(invoice.ID)}); err != nil {
+		t.Fatalf("IngestInvoice() error = %v", err)
+	}
+
+	if got := len(events.envelopes); got != 1 {
+		t.Fatalf("event count = %d, want 1", got)
+	}
+
+	envelope := events.envelopes[0]
+	if envelope.Topic != appevent.TopicBillingInvoicesV1 {
+		t.Fatalf("topic = %q, want %q", envelope.Topic, appevent.TopicBillingInvoicesV1)
+	}
+	if envelope.Type != appevent.TypeBillingInvoiceIngested {
+		t.Fatalf("type = %q, want %q", envelope.Type, appevent.TypeBillingInvoiceIngested)
+	}
+}
+
 type recordingStore struct {
 	usageRecords []billing.UsageRecord
 	invoice      billing.Invoice
@@ -159,6 +219,20 @@ func (s *recordingStore) ListInvoicesForContractPeriod(
 	query ContractPeriodQuery,
 ) ([]billing.Invoice, []billing.InvoiceLine, error) {
 	return nil, nil, nil
+}
+
+type recordingEventSink struct {
+	envelopes []appevent.Envelope
+}
+
+func (s *recordingEventSink) Append(_ context.Context, envelope appevent.Envelope) error {
+	s.envelopes = append(s.envelopes, envelope)
+	return nil
+}
+
+func (s *recordingEventSink) AppendBatch(_ context.Context, envelopes []appevent.Envelope) error {
+	s.envelopes = append(s.envelopes, envelopes...)
+	return nil
 }
 
 func validUsageRecord() billing.UsageRecord {
