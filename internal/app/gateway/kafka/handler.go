@@ -9,14 +9,13 @@ import (
 	"fmt"
 	"strings"
 
+	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	"github.com/deplagene/revenueleakageengine/internal/app/outbox"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
 	platformkafka "github.com/deplagene/revenueleakageengine/internal/platform/kafka"
 	"github.com/google/uuid"
-
-	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 )
 
 const defaultHandlerName = "revenue-leakage-engine.kafka.gateway.v1"

@@ -24,6 +24,7 @@ Revenue Leakage Engine объясняет разницу между ожидае
 ```bash
 task test
 task test-integration
+task test-kafka
 task build
 task run
 task sqlc-generate
@@ -51,6 +52,13 @@ gRPC контракты лежат в `proto/revenueleakageengine/v1`, а сге
 попадает в `internal/gen/proto/revenueleakageengine/v1`. Проверка и генерация
 выполняются через `task proto:lint` и `task proto:gen`; Taskfile сам установит
 `buf`, `protoc-gen-go` и `protoc-gen-go-grpc` в `bin/`.
+
+Kafka/outbox pipeline в Sprint 7 проверяется unit-тестами через `task test-kafka`.
+Сценарий такой: app use cases после успешной записи фактов или сверки кладут
+JSON envelope в SQLite `outbox_events`; dispatcher читает pending rows и
+публикует их в Kafka producer; Kafka consumer handler читает topics v1, проверяет
+idempotency через `inbox_events` и вызывает ingestion/reconciliation app commands.
+Доменные модели не зависят от Kafka-сообщений.
 
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 

@@ -264,6 +264,17 @@ tasks:
           -run TestSprint4SmokeDatabaseDrivenReconciliation \
           -count=1
 
+  test-kafka:
+    desc: "Запускает unit-тесты Kafka/outbox/event pipeline"
+    cmds:
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go test \
+          ./internal/app/event \
+          ./internal/app/outbox \
+          ./internal/app/gateway/kafka \
+          ./internal/platform/kafka/...
+
   test-coverage:
     desc: "Запускает go test с покрытием и сохраняет профиль"
     deps: [templ-generate]
