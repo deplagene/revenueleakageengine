@@ -89,7 +89,7 @@ func Load() Config {
 	}
 }
 
-func envString(key string, fallback string) string {
+func envString(key, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
 		return fallback
