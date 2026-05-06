@@ -34,6 +34,13 @@ task ui-deps
 task templ-generate
 task templ-watch
 task migrate-up
+task compose:config
+task compose:build
+task compose:up
+task compose:up-detached
+task compose:down
+task compose:logs
+task compose:up-infisical
 ```
 
 `task run` открывает SQLite базу `./local.db`, применяет миграции
@@ -59,6 +66,65 @@ JSON envelope в SQLite `outbox_events`; dispatcher читает pending rows и
 публикует их в Kafka producer; Kafka consumer handler читает topics v1, проверяет
 idempotency через `inbox_events` и вызывает ingestion/reconciliation app commands.
 Доменные модели не зависят от Kafka-сообщений.
+
+## Docker Compose
+
+Локальный compose-стек поднимает сервис, Kafka в KRaft combined mode и Kafka UI:
+
+- HTTP UI/API: `http://localhost:8080/ui`
+- gRPC API: `localhost:9090`
+- Kafka bootstrap для хоста: `localhost:9092`
+- Kafka UI: `http://localhost:8082`
+
+Проверка итоговой конфигурации:
+
+```bash
+task compose:config
+```
+
+Запуск в foreground:
+
+```bash
+task compose:up
+```
+
+Запуск в фоне:
+
+```bash
+task compose:up-detached
+```
+
+Compose создает топики приложения явно через `kafka-init`:
+
+- `usage.records.v1`
+- `billing.invoices.v1`
+- `reconciliation.run.requested.v1`
+- `reconciliation.run.completed.v1`
+- `leakage.case.created.v1`
+
+Переменные локального запуска описаны в `.env.example`. Файл `.env` остается
+локальным и не коммитится.
+
+## Secret Manager
+
+Сервис читает runtime-настройки из environment variables, поэтому Infisical будет
+использоваться как внешний injector секретов, а не как зависимость domain/app
+кода. Локальный путь без встраивания CLI в Docker image:
+
+```bash
+INFISICAL_ENV=dev INFISICAL_PROJECT_ID=<project-id> task compose:up-infisical
+```
+
+В этом режиме Infisical передает секреты процессу Docker Compose. Чтобы новый
+секрет дошел до контейнера приложения, его нужно явно добавить в `environment`
+сервиса `revenueleakageengine` в `docker-compose.yaml`.
+
+В Infisical нужно хранить только секретные значения: будущие DSN, Kafka
+SASL/SSL credentials, API tokens и ключи внешних интеграций. Несекретные
+локальные параметры вроде портов, имени Kafka topic или `RLE_LOG_JSON` остаются
+в `.env.example` и compose defaults. Когда появятся production-секреты для
+каждого сервиса, можно перейти на service-specific machine identity token в
+compose-переменной `INFISICAL_TOKEN_REVENUELEAKAGEENGINE`.
 
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 
