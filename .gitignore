@@ -29,6 +29,7 @@ go.work.sum
 
 # Local SQLite database files
 local.db*
+data/
 
 # Local tool and build cache
 .cache/

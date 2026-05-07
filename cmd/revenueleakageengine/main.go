@@ -16,6 +16,7 @@ import (
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
 	"github.com/deplagene/revenueleakageengine/internal/app/config"
 	contractapp "github.com/deplagene/revenueleakageengine/internal/app/contract"
+	documentapp "github.com/deplagene/revenueleakageengine/internal/app/document"
 	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	gatewaygrpc "github.com/deplagene/revenueleakageengine/internal/app/gateway/grpc"
 	gatewayhttp "github.com/deplagene/revenueleakageengine/internal/app/gateway/http"
@@ -24,10 +25,15 @@ import (
 	"github.com/deplagene/revenueleakageengine/internal/app/outbox"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
 	"github.com/deplagene/revenueleakageengine/internal/migrator"
+	platformai "github.com/deplagene/revenueleakageengine/internal/platform/ai"
+	disabledai "github.com/deplagene/revenueleakageengine/internal/platform/ai/disabled"
+	nvidiaai "github.com/deplagene/revenueleakageengine/internal/platform/ai/nvidia"
 	platformgrpc "github.com/deplagene/revenueleakageengine/internal/platform/grpc"
 	"github.com/deplagene/revenueleakageengine/internal/platform/sqlite"
+	localstorage "github.com/deplagene/revenueleakageengine/internal/platform/storage/local"
 	casework "github.com/deplagene/revenueleakageengine/internal/service/case"
 	contractwork "github.com/deplagene/revenueleakageengine/internal/service/contract"
+	documentwork "github.com/deplagene/revenueleakageengine/internal/service/document"
 	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
 	revenueservice "github.com/deplagene/revenueleakageengine/internal/service/revenue"
 	"github.com/go-chi/chi/v5"
@@ -95,6 +101,11 @@ func run() (err error) {
 		return err
 	}
 
+	documentQueries, documentCommands, err := buildDocumentUseCases(db, cfg.Document, cfg.AI)
+	if err != nil {
+		return err
+	}
+
 	httpHandler, err := gatewayhttp.NewHandler(
 		reconciliationWorkflow,
 		caseQueries,
@@ -102,6 +113,10 @@ func run() (err error) {
 		contractQueries,
 		contractCommands,
 		ingestionCommands,
+		gatewayhttp.DocumentDependencies{
+			Queries:  documentQueries,
+			Commands: documentCommands,
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("build http handler: %w", err)
@@ -191,6 +206,62 @@ func buildCaseUseCases(db *sql.DB) (*caseapp.Queries, *caseapp.Commands, error) 
 	}
 
 	return queries, commands, nil
+}
+
+func buildDocumentUseCases(
+	db *sql.DB,
+	documentCfg config.DocumentConfig,
+	aiCfg config.AIConfig,
+) (*documentapp.Queries, *documentapp.Commands, error) {
+	documentStore := documentwork.NewSQLiteStore(db)
+	documentService, err := documentwork.NewService(documentStore)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build document service: %w", err)
+	}
+
+	objectStore, err := localstorage.NewStore(documentCfg.StoragePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build document storage: %w", err)
+	}
+
+	extractor, err := buildDocumentExtractor(aiCfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	queries, err := documentapp.NewQueries(documentService)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build document queries: %w", err)
+	}
+
+	commands, err := documentapp.NewCommands(documentService, objectStore, extractor, documentapp.Config{
+		MaxFilesPerUpload: documentCfg.MaxFilesPerUpload,
+		MaxFileBytes:      documentCfg.MaxFileBytes,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("build document commands: %w", err)
+	}
+
+	return queries, commands, nil
+}
+
+func buildDocumentExtractor(cfg config.AIConfig) (platformai.Extractor, error) {
+	switch cfg.Provider {
+	case "nvidia":
+		extractor, err := nvidiaai.NewExtractor(nvidiaai.Config{
+			BaseURL:      cfg.NVIDIABaseURL,
+			APIKey:       cfg.NVIDIAAPIKey,
+			Model:        cfg.NVIDIAModel,
+			Timeout:      cfg.NVIDIARequestTimeout,
+			MaxTextRunes: cfg.NVIDIAMaxTextRunes,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("build nvidia extractor: %w", err)
+		}
+		return extractor, nil
+	default:
+		return disabledai.Extractor{}, nil
+	}
 }
 
 func newRouter(

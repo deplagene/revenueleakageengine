@@ -15,6 +15,8 @@ type Config struct {
 	Migrations MigrationConfig
 	Logging    LoggingConfig
 	Kafka      KafkaConfig
+	Document   DocumentConfig
+	AI         AIConfig
 }
 
 // HTTPConfig holds HTTP server settings.
@@ -56,6 +58,23 @@ type KafkaConfig struct {
 	GroupID string
 }
 
+// DocumentConfig holds document intake runtime limits.
+type DocumentConfig struct {
+	StoragePath       string
+	MaxFilesPerUpload int
+	MaxFileBytes      int64
+}
+
+// AIConfig holds AI provider settings for extraction adapters.
+type AIConfig struct {
+	Provider             string
+	NVIDIAAPIKey         string
+	NVIDIABaseURL        string
+	NVIDIAModel          string
+	NVIDIAMaxTextRunes   int
+	NVIDIARequestTimeout time.Duration
+}
+
 // Load returns the application configuration.
 func Load() Config {
 	return Config{
@@ -86,6 +105,19 @@ func Load() Config {
 			Brokers: envStringSlice("RLE_KAFKA_BROKERS", []string{"localhost:9092"}),
 			GroupID: envString("RLE_KAFKA_GROUP_ID", "revenueleakageengine"),
 		},
+		Document: DocumentConfig{
+			StoragePath:       envString("RLE_DOCUMENT_STORAGE_PATH", "./data/documents"),
+			MaxFilesPerUpload: envInt("RLE_DOCUMENT_MAX_FILES_PER_UPLOAD", 5),
+			MaxFileBytes:      envInt64("RLE_DOCUMENT_MAX_FILE_BYTES", 10<<20),
+		},
+		AI: AIConfig{
+			Provider:             envString("RLE_AI_PROVIDER", "disabled"),
+			NVIDIAAPIKey:         envString("RLE_NVIDIA_API_KEY", ""),
+			NVIDIABaseURL:        envString("RLE_NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+			NVIDIAModel:          envString("RLE_NVIDIA_MODEL", "nvidia/llama-3.1-nemotron-nano-8b-v1"),
+			NVIDIAMaxTextRunes:   envInt("RLE_NVIDIA_MAX_TEXT_RUNES", 60000),
+			NVIDIARequestTimeout: envDuration("RLE_NVIDIA_REQUEST_TIMEOUT", 45*time.Second),
+		},
 	}
 }
 
@@ -105,6 +137,48 @@ func envBool(key string, fallback bool) bool {
 	}
 
 	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func envInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func envInt64(key string, fallback int64) int64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := time.ParseDuration(value)
 	if err != nil {
 		return fallback
 	}

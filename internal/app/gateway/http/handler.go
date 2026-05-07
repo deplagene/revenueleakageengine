@@ -9,8 +9,12 @@ import (
 	stdhttp "net/http"
 
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
+	documentapp "github.com/deplagene/revenueleakageengine/internal/app/document"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
+	documentdomain "github.com/deplagene/revenueleakageengine/internal/domain/document"
+	documentservice "github.com/deplagene/revenueleakageengine/internal/service/document"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // ErrReconciliationRunnerRequired reports that HTTP routes were created
@@ -36,6 +40,12 @@ var ErrContractCommandsRequired = errors.New("contract commands are required")
 // ErrIngestionCommandsRequired reports that HTTP routes were created without an ingestion
 // command dependency.
 var ErrIngestionCommandsRequired = errors.New("ingestion commands are required")
+
+// ErrDocumentQueriesRequired reports that HTTP routes were created without document queries.
+var ErrDocumentQueriesRequired = errors.New("document queries are required")
+
+// ErrDocumentCommandsRequired reports that HTTP routes were created without document commands.
+var ErrDocumentCommandsRequired = errors.New("document commands are required")
 
 type reconciliationRunner interface {
 	RunRevenueLeakageCheck(
@@ -70,6 +80,29 @@ type caseCommands interface {
 	) (caseapp.UpdateCaseAssigneeResult, error)
 }
 
+type documentQueries interface {
+	ListDocuments(
+		ctx context.Context,
+		cmd documentservice.ListDocumentsCommand,
+	) ([]documentdomain.Document, error)
+	GetDocument(ctx context.Context, tenantID, documentID uuid.UUID) (documentdomain.Document, error)
+	ListDrafts(
+		ctx context.Context,
+		cmd documentservice.ListDraftsCommand,
+	) ([]documentdomain.ExtractionDraft, error)
+}
+
+type documentCommands interface {
+	UploadDocuments(
+		ctx context.Context,
+		cmd documentapp.UploadDocumentsCommand,
+	) (documentapp.UploadDocumentsResult, error)
+	ExtractDocumentFacts(
+		ctx context.Context,
+		cmd documentapp.ExtractDocumentFactsCommand,
+	) (documentapp.ExtractDocumentFactsResult, error)
+}
+
 // Handler registers HTTP routes backed by application use cases.
 type Handler struct {
 	reconciliation    reconciliationRunner
@@ -78,6 +111,8 @@ type Handler struct {
 	contractQueries   contractQueries
 	contractCommands  contractCommands
 	ingestionCommands ingestionCommands
+	documentQueries   documentQueries
+	documentCommands  documentCommands
 }
 
 // NewHandler constructs the gateway HTTP handler set.
@@ -88,6 +123,7 @@ func NewHandler(
 	contractQueries contractQueries,
 	contractCommands contractCommands,
 	ingestionCommands ingestionCommands,
+	documentDeps ...DocumentDependencies,
 ) (*Handler, error) {
 	if reconciliation == nil {
 		return nil, ErrReconciliationRunnerRequired
@@ -113,14 +149,34 @@ func NewHandler(
 		return nil, ErrIngestionCommandsRequired
 	}
 
-	return &Handler{
+	handler := &Handler{
 		reconciliation:    reconciliation,
 		cases:             cases,
 		caseCommands:      caseCommands,
 		contractQueries:   contractQueries,
 		contractCommands:  contractCommands,
 		ingestionCommands: ingestionCommands,
-	}, nil
+	}
+
+	if len(documentDeps) > 0 {
+		deps := documentDeps[0]
+		if deps.Queries == nil {
+			return nil, ErrDocumentQueriesRequired
+		}
+		if deps.Commands == nil {
+			return nil, ErrDocumentCommandsRequired
+		}
+		handler.documentQueries = deps.Queries
+		handler.documentCommands = deps.Commands
+	}
+
+	return handler, nil
+}
+
+// DocumentDependencies enables optional Sprint 8 document intake routes.
+type DocumentDependencies struct {
+	Queries  documentQueries
+	Commands documentCommands
 }
 
 // RegisterRoutes attaches API routes to the provided router.
@@ -147,6 +203,13 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 		// Ingestion
 		router.Post("/ingest/usage", h.handleIngestUsage)
 		router.Post("/ingest/invoices", h.handleIngestInvoices)
+
+		if h.documentQueries != nil && h.documentCommands != nil {
+			router.Post("/documents", h.handleUploadDocuments)
+			router.Get("/documents", h.handleListDocuments)
+			router.Post("/documents/{document_id}/extract", h.handleExtractDocumentFacts)
+			router.Get("/documents/{document_id}/drafts", h.handleListDocumentDrafts)
+		}
 	})
 }
 
