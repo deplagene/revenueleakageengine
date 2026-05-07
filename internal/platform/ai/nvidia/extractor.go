@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -32,7 +33,7 @@ var (
 
 type Config struct {
 	BaseURL      string
-	APIKey       string
+	Token        string
 	Model        string
 	Timeout      time.Duration
 	MaxTextRunes int
@@ -54,7 +55,10 @@ func NewExtractor(cfg Config) (*Extractor, error) {
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
 	}
-	if strings.TrimSpace(cfg.APIKey) == "" {
+	if err := validateBaseURL(baseURL); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cfg.Token) == "" {
 		return nil, ErrAPIKeyRequired
 	}
 	model := strings.TrimSpace(cfg.Model)
@@ -72,7 +76,7 @@ func NewExtractor(cfg Config) (*Extractor, error) {
 
 	return &Extractor{
 		baseURL:      baseURL,
-		apiKey:       strings.TrimSpace(cfg.APIKey),
+		apiKey:       strings.TrimSpace(cfg.Token),
 		model:        model,
 		timeout:      timeout,
 		maxTextRunes: maxTextRunes,
@@ -114,13 +118,15 @@ func (e *Extractor) Extract(ctx context.Context, req platformai.ExtractRequest) 
 	httpReq.Header.Set("Authorization", "Bearer "+e.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	//nolint:gosec // baseURL is validated during construction and controlled by trusted runtime config.
 	httpResp, err := e.client.Do(httpReq)
 	if err != nil {
 		return platformai.ExtractResult{}, fmt.Errorf("call nvidia api: %w", err)
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, httpResp.Body)
-		_ = httpResp.Body.Close()
+		if closeErr := httpResp.Body.Close(); closeErr != nil {
+			return
+		}
 	}()
 
 	respBytes, err := io.ReadAll(io.LimitReader(httpResp.Body, 4<<20))
@@ -151,6 +157,17 @@ func (e *Extractor) Extract(ctx context.Context, req platformai.ExtractRequest) 
 		EvidenceJSON:    json.RawMessage("[]"),
 		ConfidenceBasis: 7000,
 	}, nil
+}
+
+func validateBaseURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("parse nvidia base url: %w", err)
+	}
+	if parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+		return ErrInvalidNVIDIABaseURL
+	}
+	return nil
 }
 
 func textFromContent(contentType string, content []byte, maxRunes int) (string, error) {

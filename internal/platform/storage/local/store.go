@@ -47,7 +47,7 @@ func (s *Store) Put(ctx context.Context, object storage.Object) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create storage directory: %w", err)
 	}
-	if err := os.WriteFile(path, object.Content, 0o640); err != nil {
+	if err := os.WriteFile(path, object.Content, 0o600); err != nil {
 		return fmt.Errorf("write storage object: %w", err)
 	}
 	return nil
@@ -65,6 +65,7 @@ func (s *Store) Get(ctx context.Context, key string) (storage.Object, error) {
 	if err != nil {
 		return storage.Object{}, err
 	}
+	//nolint:gosec // safePath constrains keys to the configured storage root.
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return storage.Object{}, fmt.Errorf("read storage object: %w", err)

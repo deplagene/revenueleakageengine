@@ -250,7 +250,7 @@ func buildDocumentExtractor(cfg config.AIConfig) (platformai.Extractor, error) {
 	case "nvidia":
 		extractor, err := nvidiaai.NewExtractor(nvidiaai.Config{
 			BaseURL:      cfg.NVIDIABaseURL,
-			APIKey:       cfg.NVIDIAAPIKey,
+			Token:        cfg.NVIDIAAPIKey,
 			Model:        cfg.NVIDIAModel,
 			Timeout:      cfg.NVIDIARequestTimeout,
 			MaxTextRunes: cfg.NVIDIAMaxTextRunes,
