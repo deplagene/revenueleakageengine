@@ -16,6 +16,8 @@ vars:
 
   DB_PATH: "./local.db"
 
+  DOCKER_COMPOSE: "docker compose"
+
   BIN_DIR: "{{.ROOT_DIR}}/bin"
   GOLANGCI_LINT: "{{.BIN_DIR}}/golangci-lint"
   GCI: "{{.BIN_DIR}}/gci"
@@ -264,6 +266,17 @@ tasks:
           -run TestSprint4SmokeDatabaseDrivenReconciliation \
           -count=1
 
+  test-kafka:
+    desc: "Запускает unit-тесты Kafka/outbox/event pipeline"
+    cmds:
+      - |
+        mkdir -p .cache/go-build
+        GOCACHE={{.ROOT_DIR}}/.cache/go-build go test \
+          ./internal/app/event \
+          ./internal/app/outbox \
+          ./internal/app/gateway/kafka \
+          ./internal/platform/kafka/...
+
   test-coverage:
     desc: "Запускает go test с покрытием и сохраняет профиль"
     deps: [templ-generate]
@@ -292,3 +305,47 @@ tasks:
     deps: [install-goose]
     cmds:
       - "{{.GOOSE}} -dir internal/platform/sqlite/migrations sqlite3 {{.DB_PATH}} up"
+
+  compose:config:
+    desc: "Проверяет итоговую конфигурацию docker-compose.yaml"
+    cmds:
+      - "{{.DOCKER_COMPOSE}} config"
+
+  compose:build:
+    desc: "Собирает Docker image сервиса"
+    deps: [templ-generate]
+    cmds:
+      - "{{.DOCKER_COMPOSE}} build revenueleakageengine"
+
+  compose:up:
+    desc: "Запускает сервис, Kafka и Kafka UI через Docker Compose"
+    deps: [templ-generate]
+    cmds:
+      - "{{.DOCKER_COMPOSE}} up --build"
+
+  compose:up-detached:
+    desc: "Запускает сервис, Kafka и Kafka UI в фоне"
+    deps: [templ-generate]
+    cmds:
+      - "{{.DOCKER_COMPOSE}} up -d --build"
+
+  compose:down:
+    desc: "Останавливает Docker Compose стек"
+    cmds:
+      - "{{.DOCKER_COMPOSE}} down"
+
+  compose:logs:
+    desc: "Показывает логи Docker Compose стека"
+    cmds:
+      - "{{.DOCKER_COMPOSE}} logs -f"
+
+  compose:up-infisical:
+    desc: "Запускает Docker Compose через Infisical CLI с секретами из выбранного окружения"
+    deps: [templ-generate]
+    cmds:
+      - |
+        if [ -n "${INFISICAL_PROJECT_ID:-}" ]; then
+          infisical run --env="${INFISICAL_ENV:-dev}" --projectId="${INFISICAL_PROJECT_ID}" -- {{.DOCKER_COMPOSE}} up --build
+        else
+          infisical run --env="${INFISICAL_ENV:-dev}" -- {{.DOCKER_COMPOSE}} up --build
+        fi

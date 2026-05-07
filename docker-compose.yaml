@@ -1,0 +1,115 @@
+name: revenueleakageengine
+
+services:
+  revenueleakageengine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: ${GO_VERSION:-1.26.2}
+    image: revenueleakageengine:${RLE_IMAGE_TAG:-local}
+    container_name: revenueleakageengine
+    ports:
+      - "${RLE_HTTP_PORT:-8080}:8080"
+      - "${RLE_GRPC_PORT:-9090}:9090"
+    environment:
+      RLE_HTTP_ADDR: ":8080"
+      RLE_GRPC_ADDR: ":9090"
+      RLE_SQLITE_PATH: "/data/local.db"
+      RLE_MIGRATIONS_PATH: "/app/internal/platform/sqlite/migrations"
+      RLE_LOG_LEVEL: "${RLE_LOG_LEVEL:-}"
+      RLE_LOG_JSON: "${RLE_LOG_JSON:-true}"
+      RLE_KAFKA_BROKERS: "kafka:${KAFKA_INTERNAL_PORT:-29092}"
+      RLE_KAFKA_GROUP_ID: "${RLE_KAFKA_GROUP_ID:-revenueleakageengine}"
+    volumes:
+      - rle_data:/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - revenueleakageengine-net
+
+  kafka:
+    image: confluentinc/cp-kafka:${KAFKA_IMAGE_TAG:-8.2.0}
+    container_name: revenueleakageengine-kafka
+    hostname: kafka
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-9092}:${KAFKA_EXTERNAL_PORT:-9092}"
+    environment:
+      CLUSTER_ID: "${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}"
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:${KAFKA_CONTROLLER_PORT:-29093}"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:${KAFKA_INTERNAL_PORT:-29092},CONTROLLER://kafka:${KAFKA_CONTROLLER_PORT:-29093},PLAINTEXT_HOST://0.0.0.0:${KAFKA_EXTERNAL_PORT:-9092}"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:${KAFKA_INTERNAL_PORT:-29092},PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT:-9092}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:-168}"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-broker-api-versions --bootstrap-server localhost:${KAFKA_EXTERNAL_PORT:-9092} >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - revenueleakageengine-net
+
+  kafka-init:
+    image: confluentinc/cp-kafka:${KAFKA_IMAGE_TAG:-8.2.0}
+    container_name: revenueleakageengine-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - bash
+      - -ec
+      - |
+        echo "Creating Revenue Leakage Engine Kafka topics..."
+        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic usage.records.v1 --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic billing.invoices.v1 --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic reconciliation.run.requested.v1 --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic reconciliation.run.completed.v1 --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic leakage.case.created.v1 --partitions 3 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --list
+    networks:
+      - revenueleakageengine-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:-v0.7.2}
+    container_name: revenueleakageengine-kafka-ui
+    ports:
+      - "${KAFKA_UI_PORT:-8082}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local-rle"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:${KAFKA_INTERNAL_PORT:-29092}"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - revenueleakageengine-net
+
+volumes:
+  kafka_data:
+  rle_data:
+
+networks:
+  revenueleakageengine-net:
+    name: revenueleakageengine-net
+    external: false

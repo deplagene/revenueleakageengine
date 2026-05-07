@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	contractdomain "github.com/deplagene/revenueleakageengine/internal/domain/contract"
@@ -89,12 +90,17 @@ func TestRevenueLeakageWorkflowRunRevenueLeakageCheck(t *testing.T) {
 			invoiceLine(invoiceID, billableItemID, valueobject.MustMoney("USD", 464_000)),
 		},
 	}
+	events := &workflowEventSink{}
 
 	workflow, err := NewRevenueLeakageWorkflow(
 		revenueService,
 		reconciliationService,
 		contractQueries,
 		ingestionQueries,
+		WithEventSink(events),
+		WithClock(func() time.Time {
+			return now
+		}),
 	)
 	if err != nil {
 		t.Fatalf("NewRevenueLeakageWorkflow() error = %v", err)
@@ -152,6 +158,18 @@ func TestRevenueLeakageWorkflowRunRevenueLeakageCheck(t *testing.T) {
 
 	if store.completedRuns[0].CaseCount != 1 {
 		t.Fatalf("completed run case count = %d, want 1", store.completedRuns[0].CaseCount)
+	}
+
+	if got := len(events.envelopes); got != 2 {
+		t.Fatalf("event count = %d, want 2", got)
+	}
+
+	if events.envelopes[0].Topic != appevent.TopicReconciliationRunCompletedV1 {
+		t.Fatalf("event[0] topic = %q, want %q", events.envelopes[0].Topic, appevent.TopicReconciliationRunCompletedV1)
+	}
+
+	if events.envelopes[1].Type != appevent.TypeLeakageCaseCreated {
+		t.Fatalf("event[1] type = %q, want %q", events.envelopes[1].Type, appevent.TypeLeakageCaseCreated)
 	}
 }
 
@@ -280,6 +298,20 @@ type workflowStore struct {
 	cases         []leakage.Case
 	runs          []reconciliationservice.ReconciliationRun
 	completedRuns []reconciliationservice.ReconciliationRun
+}
+
+type workflowEventSink struct {
+	envelopes []appevent.Envelope
+}
+
+func (s *workflowEventSink) Append(_ context.Context, envelope appevent.Envelope) error {
+	s.envelopes = append(s.envelopes, envelope)
+	return nil
+}
+
+func (s *workflowEventSink) AppendBatch(_ context.Context, envelopes []appevent.Envelope) error {
+	s.envelopes = append(s.envelopes, envelopes...)
+	return nil
 }
 
 func (s *workflowStore) SaveExpectedRevenue(

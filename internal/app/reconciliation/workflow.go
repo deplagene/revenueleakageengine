@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	appevent "github.com/deplagene/revenueleakageengine/internal/app/event"
 	ingestionapp "github.com/deplagene/revenueleakageengine/internal/app/ingestion"
 	"github.com/deplagene/revenueleakageengine/internal/domain/billing"
 	"github.com/deplagene/revenueleakageengine/internal/domain/contract"
@@ -52,6 +53,29 @@ type RevenueLeakageWorkflow struct {
 	reconciliation   *reconciliationservice.Service
 	contractQueries  ContractQueries
 	ingestionQueries IngestionQueries
+	events           eventSink
+	now              func() time.Time
+}
+
+type eventSink interface {
+	Append(ctx context.Context, envelope appevent.Envelope) error
+	AppendBatch(ctx context.Context, envelopes []appevent.Envelope) error
+}
+
+type WorkflowOption func(*RevenueLeakageWorkflow)
+
+func WithEventSink(events eventSink) WorkflowOption {
+	return func(w *RevenueLeakageWorkflow) {
+		w.events = events
+	}
+}
+
+func WithClock(now func() time.Time) WorkflowOption {
+	return func(w *RevenueLeakageWorkflow) {
+		if now != nil {
+			w.now = now
+		}
+	}
 }
 
 type ContractQueries interface {
@@ -78,6 +102,7 @@ func NewRevenueLeakageWorkflow(
 	reconciliation *reconciliationservice.Service,
 	contractQueries ContractQueries,
 	ingestionQueries IngestionQueries,
+	opts ...WorkflowOption,
 ) (*RevenueLeakageWorkflow, error) {
 	if revenue == nil {
 		return nil, ErrRevenueServiceRequired
@@ -95,12 +120,19 @@ func NewRevenueLeakageWorkflow(
 		return nil, ErrIngestionQueriesRequired
 	}
 
-	return &RevenueLeakageWorkflow{
+	workflow := &RevenueLeakageWorkflow{
 		revenue:          revenue,
 		reconciliation:   reconciliation,
 		contractQueries:  contractQueries,
 		ingestionQueries: ingestionQueries,
-	}, nil
+		now:              time.Now,
+	}
+
+	for _, opt := range opts {
+		opt(workflow)
+	}
+
+	return workflow, nil
 }
 
 // RunRevenueLeakageCheckCommand contains the inputs required for one full MVP
@@ -275,11 +307,17 @@ func (w *RevenueLeakageWorkflow) RunRevenueLeakageCheck(
 		return RunRevenueLeakageCheckResult{}, fmt.Errorf("%s: reconcile period: %w", op, err)
 	}
 
-	return RunRevenueLeakageCheckResult{
+	result := RunRevenueLeakageCheckResult{
 		ExpectedEntry:        expected.ID,
 		ActualEntryCount:     len(actualEntries),
 		ReconciliationResult: reconciliationResult,
-	}, nil
+	}
+
+	if err := w.publishReconciliationCompleted(ctx, cmd, result, traceID); err != nil {
+		return RunRevenueLeakageCheckResult{}, fmt.Errorf("%s: publish reconciliation events: %w", op, err)
+	}
+
+	return result, nil
 }
 
 type fixedUsagePricingDefinition struct {

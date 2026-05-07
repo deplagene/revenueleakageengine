@@ -13,14 +13,17 @@ type Querier interface {
 	CreateActualRevenueEntry(ctx context.Context, arg CreateActualRevenueEntryParams) error
 	CreateCaseStatusHistory(ctx context.Context, arg CreateCaseStatusHistoryParams) error
 	CreateExpectedRevenueEntry(ctx context.Context, arg CreateExpectedRevenueEntryParams) error
+	CreateInboxEvent(ctx context.Context, arg CreateInboxEventParams) error
 	CreateInvoiceLine(ctx context.Context, arg CreateInvoiceLineParams) error
 	CreateLeakageCase(ctx context.Context, arg CreateLeakageCaseParams) error
 	CreateLeakageEvidence(ctx context.Context, arg CreateLeakageEvidenceParams) error
+	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) error
 	CreateReconciliationRun(ctx context.Context, arg CreateReconciliationRunParams) error
 	DeleteInvoiceLinesByInvoice(ctx context.Context, invoiceID string) error
 	GetBillableItem(ctx context.Context, id string) (BillableItem, error)
 	GetBillableItemByCode(ctx context.Context, arg GetBillableItemByCodeParams) (BillableItem, error)
 	GetContract(ctx context.Context, id string) (Contract, error)
+	GetInboxEvent(ctx context.Context, arg GetInboxEventParams) (InboxEvent, error)
 	GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoiceBySourceExternalParams) (Invoice, error)
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
 	GetReconciliationRun(ctx context.Context, arg GetReconciliationRunParams) (ReconciliationRun, error)
@@ -35,9 +38,12 @@ type Querier interface {
 	ListInvoicesForContractPeriod(ctx context.Context, arg ListInvoicesForContractPeriodParams) ([]Invoice, error)
 	ListLeakageCases(ctx context.Context, arg ListLeakageCasesParams) ([]LeakageCase, error)
 	ListLeakageEvidenceByCase(ctx context.Context, caseID string) ([]LeakageEvidence, error)
+	ListPendingOutboxEvents(ctx context.Context, arg ListPendingOutboxEventsParams) ([]OutboxEvent, error)
 	ListReconciliationRuns(ctx context.Context, arg ListReconciliationRunsParams) ([]ReconciliationRun, error)
 	ListRootCausesByCase(ctx context.Context, caseID string) ([]RootCause, error)
 	ListUsageRecordsForContractPeriod(ctx context.Context, arg ListUsageRecordsForContractPeriodParams) ([]UsageRecord, error)
+	MarkOutboxEventFailed(ctx context.Context, arg MarkOutboxEventFailedParams) error
+	MarkOutboxEventPublished(ctx context.Context, arg MarkOutboxEventPublishedParams) error
 	UpdateLeakageCaseAssignee(ctx context.Context, arg UpdateLeakageCaseAssigneeParams) (int64, error)
 	UpdateLeakageCaseStatus(ctx context.Context, arg UpdateLeakageCaseStatusParams) (int64, error)
 	UpsertBillableItem(ctx context.Context, arg UpsertBillableItemParams) error

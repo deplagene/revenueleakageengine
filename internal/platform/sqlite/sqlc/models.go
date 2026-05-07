@@ -118,6 +118,14 @@ type ExpectedRevenueEntry struct {
 	TraceID                  string `json:"trace_id"`
 }
 
+type InboxEvent struct {
+	EventID     string `json:"event_id"`
+	Handler     string `json:"handler"`
+	Topic       string `json:"topic"`
+	SourceKey   string `json:"source_key"`
+	ProcessedAt string `json:"processed_at"`
+}
+
 type Invoice struct {
 	ID                    string         `json:"id"`
 	TenantID              string         `json:"tenant_id"`
@@ -186,17 +194,20 @@ type LeakageEvidence struct {
 }
 
 type OutboxEvent struct {
-	ID            string         `json:"id"`
-	TenantID      sql.NullString `json:"tenant_id"`
-	AggregateType string         `json:"aggregate_type"`
-	AggregateID   string         `json:"aggregate_id"`
-	Topic         string         `json:"topic"`
-	MessageKey    string         `json:"message_key"`
-	PayloadJson   string         `json:"payload_json"`
-	HeadersJson   string         `json:"headers_json"`
-	Status        string         `json:"status"`
-	OccurredAt    string         `json:"occurred_at"`
-	PublishedAt   sql.NullString `json:"published_at"`
+	ID           string         `json:"id"`
+	Topic        string         `json:"topic"`
+	EventType    string         `json:"event_type"`
+	TenantID     string         `json:"tenant_id"`
+	ContractID   sql.NullString `json:"contract_id"`
+	PartitionKey string         `json:"partition_key"`
+	PayloadJson  string         `json:"payload_json"`
+	HeadersJson  string         `json:"headers_json"`
+	Status       string         `json:"status"`
+	Attempts     int64          `json:"attempts"`
+	LastError    string         `json:"last_error"`
+	AvailableAt  string         `json:"available_at"`
+	CreatedAt    string         `json:"created_at"`
+	PublishedAt  sql.NullString `json:"published_at"`
 }
 
 type Payment struct {
