@@ -6,61 +6,68 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        GO_VERSION: ${GO_VERSION:-1.26.2}
-    image: revenueleakageengine:${RLE_IMAGE_TAG:-local}
+        GO_VERSION: ${GO_VERSION:?set GO_VERSION in Infisical}
+    image: revenueleakageengine:${RLE_IMAGE_TAG:?set RLE_IMAGE_TAG in Infisical}
     container_name: revenueleakageengine
     ports:
-      - "${RLE_HTTP_PORT:-8080}:8080"
-      - "${RLE_GRPC_PORT:-9090}:9090"
+      - "${RLE_HTTP_PORT:?set RLE_HTTP_PORT in Infisical}:8080"
+      - "${RLE_GRPC_PORT:?set RLE_GRPC_PORT in Infisical}:9090"
     environment:
-      RLE_HTTP_ADDR: ":8080"
-      RLE_GRPC_ADDR: ":9090"
-      RLE_SQLITE_PATH: "/data/local.db"
-      RLE_MIGRATIONS_PATH: "/app/internal/platform/sqlite/migrations"
-      RLE_LOG_LEVEL: "${RLE_LOG_LEVEL:-}"
-      RLE_LOG_JSON: "${RLE_LOG_JSON:-true}"
-      RLE_KAFKA_BROKERS: "kafka:${KAFKA_INTERNAL_PORT:-29092}"
-      RLE_KAFKA_GROUP_ID: "${RLE_KAFKA_GROUP_ID:-revenueleakageengine}"
+      RLE_HTTP_ADDR: "${RLE_HTTP_ADDR:?set RLE_HTTP_ADDR in Infisical}"
+      RLE_GRPC_ADDR: "${RLE_GRPC_ADDR:?set RLE_GRPC_ADDR in Infisical}"
+      RLE_SQLITE_PATH: "${RLE_SQLITE_PATH:?set RLE_SQLITE_PATH in Infisical}"
+      RLE_MIGRATIONS_PATH: "${RLE_MIGRATIONS_PATH:?set RLE_MIGRATIONS_PATH in Infisical}"
+      RLE_LOG_LEVEL: "${RLE_LOG_LEVEL:?set RLE_LOG_LEVEL in Infisical}"
+      RLE_LOG_JSON: "${RLE_LOG_JSON:?set RLE_LOG_JSON in Infisical}"
+      RLE_KAFKA_BROKERS: "${RLE_KAFKA_BROKERS:?set RLE_KAFKA_BROKERS in Infisical}"
+      RLE_KAFKA_GROUP_ID: "${RLE_KAFKA_GROUP_ID:?set RLE_KAFKA_GROUP_ID in Infisical}"
+      RLE_DOCUMENT_STORAGE_PATH: "${RLE_DOCUMENT_STORAGE_PATH:?set RLE_DOCUMENT_STORAGE_PATH in Infisical}"
+      RLE_DOCUMENT_MAX_FILES_PER_UPLOAD: "${RLE_DOCUMENT_MAX_FILES_PER_UPLOAD:?set RLE_DOCUMENT_MAX_FILES_PER_UPLOAD in Infisical}"
+      RLE_DOCUMENT_MAX_FILE_BYTES: "${RLE_DOCUMENT_MAX_FILE_BYTES:?set RLE_DOCUMENT_MAX_FILE_BYTES in Infisical}"
+      RLE_AI_PROVIDER: "${RLE_AI_PROVIDER:?set RLE_AI_PROVIDER in Infisical}"
+      RLE_NVIDIA_API_KEY: "${RLE_NVIDIA_API_KEY:?set RLE_NVIDIA_API_KEY in Infisical}"
+      RLE_NVIDIA_BASE_URL: "${RLE_NVIDIA_BASE_URL:?set RLE_NVIDIA_BASE_URL in Infisical}"
+      RLE_NVIDIA_MODEL: "${RLE_NVIDIA_MODEL:?set RLE_NVIDIA_MODEL in Infisical}"
+      RLE_NVIDIA_MAX_TEXT_RUNES: "${RLE_NVIDIA_MAX_TEXT_RUNES:?set RLE_NVIDIA_MAX_TEXT_RUNES in Infisical}"
+      RLE_NVIDIA_REQUEST_TIMEOUT: "${RLE_NVIDIA_REQUEST_TIMEOUT:?set RLE_NVIDIA_REQUEST_TIMEOUT in Infisical}"
     volumes:
       - rle_data:/data
     depends_on:
       kafka:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - revenueleakageengine-net
 
   kafka:
-    image: confluentinc/cp-kafka:${KAFKA_IMAGE_TAG:-8.2.0}
+    image: confluentinc/cp-kafka:${KAFKA_IMAGE_TAG:?set KAFKA_IMAGE_TAG in Infisical}
     container_name: revenueleakageengine-kafka
     hostname: kafka
     ports:
-      - "${KAFKA_EXTERNAL_PORT:-9092}:${KAFKA_EXTERNAL_PORT:-9092}"
+      - "${KAFKA_EXTERNAL_PORT:?set KAFKA_EXTERNAL_PORT in Infisical}:${KAFKA_EXTERNAL_PORT:?set KAFKA_EXTERNAL_PORT in Infisical}"
     environment:
-      CLUSTER_ID: "${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}"
-      KAFKA_NODE_ID: "1"
-      KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:${KAFKA_CONTROLLER_PORT:-29093}"
-      KAFKA_LISTENERS: "PLAINTEXT://kafka:${KAFKA_INTERNAL_PORT:-29092},CONTROLLER://kafka:${KAFKA_CONTROLLER_PORT:-29093},PLAINTEXT_HOST://0.0.0.0:${KAFKA_EXTERNAL_PORT:-9092}"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:${KAFKA_INTERNAL_PORT:-29092},PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT:-9092}"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
-      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
-      KAFKA_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:-168}"
+      CLUSTER_ID: "${KAFKA_CLUSTER_ID:?set KAFKA_CLUSTER_ID in Infisical}"
+      KAFKA_NODE_ID: "${KAFKA_NODE_ID:?set KAFKA_NODE_ID in Infisical}"
+      KAFKA_PROCESS_ROLES: "${KAFKA_PROCESS_ROLES:?set KAFKA_PROCESS_ROLES in Infisical}"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "${KAFKA_CONTROLLER_QUORUM_VOTERS:?set KAFKA_CONTROLLER_QUORUM_VOTERS in Infisical}"
+      KAFKA_LISTENERS: "${KAFKA_LISTENERS:?set KAFKA_LISTENERS in Infisical}"
+      KAFKA_ADVERTISED_LISTENERS: "${KAFKA_ADVERTISED_LISTENERS:?set KAFKA_ADVERTISED_LISTENERS in Infisical}"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:?set KAFKA_LISTENER_SECURITY_PROTOCOL_MAP in Infisical}"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "${KAFKA_INTER_BROKER_LISTENER_NAME:?set KAFKA_INTER_BROKER_LISTENER_NAME in Infisical}"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "${KAFKA_CONTROLLER_LISTENER_NAMES:?set KAFKA_CONTROLLER_LISTENER_NAMES in Infisical}"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "${KAFKA_AUTO_CREATE_TOPICS_ENABLE:?set KAFKA_AUTO_CREATE_TOPICS_ENABLE in Infisical}"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR:?set KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR in Infisical}"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "${KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR:?set KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR in Infisical}"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "${KAFKA_TRANSACTION_STATE_LOG_MIN_ISR:?set KAFKA_TRANSACTION_STATE_LOG_MIN_ISR in Infisical}"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "${KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS:?set KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS in Infisical}"
+      KAFKA_LOG_RETENTION_HOURS: "${KAFKA_LOG_RETENTION_HOURS:?set KAFKA_LOG_RETENTION_HOURS in Infisical}"
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "kafka-broker-api-versions --bootstrap-server localhost:${KAFKA_EXTERNAL_PORT:-9092} >/dev/null 2>&1",
+          "kafka-broker-api-versions --bootstrap-server ${KAFKA_HEALTHCHECK_BOOTSTRAP_SERVER:?set KAFKA_HEALTHCHECK_BOOTSTRAP_SERVER in Infisical} >/dev/null 2>&1",
         ]
       interval: 10s
       timeout: 5s
@@ -71,33 +78,51 @@ services:
       - revenueleakageengine-net
 
   kafka-init:
-    image: confluentinc/cp-kafka:${KAFKA_IMAGE_TAG:-8.2.0}
+    image: confluentinc/cp-kafka:${KAFKA_IMAGE_TAG:?set KAFKA_IMAGE_TAG in Infisical}
     container_name: revenueleakageengine-kafka-init
     depends_on:
       kafka:
         condition: service_healthy
     command:
       - bash
-      - -ec
+      - -c
       - |
+        set -u
+        broker="${KAFKA_INTERNAL_BOOTSTRAP_SERVER:?set KAFKA_INTERNAL_BOOTSTRAP_SERVER in Infisical}"
+        topics="
+          usage.records.v1
+          billing.invoices.v1
+          reconciliation.run.requested.v1
+          reconciliation.run.completed.v1
+          leakage.case.created.v1
+        "
         echo "Creating Revenue Leakage Engine Kafka topics..."
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic usage.records.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic billing.invoices.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic reconciliation.run.requested.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic reconciliation.run.completed.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic leakage.case.created.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --list
+        for topic in $$topics; do
+          created=0
+          for attempt in 1 2 3 4 5; do
+            if kafka-topics --bootstrap-server "$$broker" --create --if-not-exists --topic "$$topic" --partitions 3 --replication-factor 1; then
+              created=1
+              break
+            fi
+            echo "Topic $$topic is not ready yet, retry $$attempt/5..."
+            sleep 2
+          done
+          if [ "$$created" -ne 1 ]; then
+            echo "WARNING: topic $$topic was not created. The app can still start; check Kafka logs."
+          fi
+        done
+        kafka-topics --bootstrap-server "$$broker" --list || true
     networks:
       - revenueleakageengine-net
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:-v0.7.2}
+    image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:?set KAFKA_UI_IMAGE_TAG in Infisical}
     container_name: revenueleakageengine-kafka-ui
     ports:
-      - "${KAFKA_UI_PORT:-8082}:8080"
+      - "${KAFKA_UI_PORT:?set KAFKA_UI_PORT in Infisical}:8080"
     environment:
-      KAFKA_CLUSTERS_0_NAME: "local-rle"
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:${KAFKA_INTERNAL_PORT:-29092}"
+      KAFKA_CLUSTERS_0_NAME: "${KAFKA_CLUSTERS_0_NAME:?set KAFKA_CLUSTERS_0_NAME in Infisical}"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "${KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS:?set KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS in Infisical}"
     depends_on:
       kafka:
         condition: service_healthy

@@ -13,6 +13,7 @@ templ Header(active string) {
 			<a class={ navClass(active, "dashboard") } href="/ui">Обзор</a>
 			<a class={ navClass(active, "reconciliation") } href="/ui/reconciliation">Запуск сверки</a>
 			<a class={ navClass(active, "cases") } href="/ui/cases">Кейсы</a>
+			<a class={ navClass(active, "documents") } href="/ui/documents">Документы</a>
 		</nav>
 	</header>
 }
@@ -30,6 +31,10 @@ templ BottomNav(active string) {
 		<a class={ navClass(active, "cases") } href="/ui/cases">
 			<span></span>
 			Кейсы
+		</a>
+		<a class={ navClass(active, "documents") } href="/ui/documents">
+			<span></span>
+			Документы
 		</a>
 	</nav>
 }
@@ -235,6 +240,55 @@ templ CaseDetailPage(data CaseDetailPageData) {
 				@CaseDetailPanel(data.Panel)
 			</main>
 			@BottomNav("cases")
+		</body>
+	</html>
+}
+
+templ DocumentsPage(data DocumentsPageData) {
+	<!DOCTYPE html>
+	<html lang="ru">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ data.Title }</title>
+			<link rel="stylesheet" href="/ui/static/ui.css"/>
+			<script src="/ui/static/htmx.min.js" defer></script>
+		</head>
+		<body>
+			@Header("documents")
+			<main class="page">
+				<section class="page-header">
+					<div>
+						<h1>Документы</h1>
+						<p class="lede">Загружайте договоры, счета и usage exports. ИИ готовит draft JSON, оператор проверяет его перед отправкой в core-сервисы.</p>
+					</div>
+				</section>
+				@ifError(data.Error)
+				if data.UploadResult != "" {
+					<div class="run-result success">{ data.UploadResult }</div>
+				}
+				<section class="documents-layout">
+					<div class="panel form-panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Document intake</p>
+								<h2>Новая загрузка</h2>
+							</div>
+						</div>
+						@DocumentUploadForm(data.TenantID)
+					</div>
+					<div class="panel">
+						<div class="panel-heading">
+							<div>
+								<p class="eyebrow">Очередь</p>
+								<h2>Загруженные документы</h2>
+							</div>
+						</div>
+						@DocumentsList(data)
+					</div>
+				</section>
+			</main>
+			@BottomNav("documents")
 		</body>
 	</html>
 }

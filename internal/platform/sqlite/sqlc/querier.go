@@ -12,6 +12,8 @@ type Querier interface {
 	CompleteReconciliationRun(ctx context.Context, arg CompleteReconciliationRunParams) error
 	CreateActualRevenueEntry(ctx context.Context, arg CreateActualRevenueEntryParams) error
 	CreateCaseStatusHistory(ctx context.Context, arg CreateCaseStatusHistoryParams) error
+	CreateDocument(ctx context.Context, arg CreateDocumentParams) error
+	CreateDocumentExtractionDraft(ctx context.Context, arg CreateDocumentExtractionDraftParams) error
 	CreateExpectedRevenueEntry(ctx context.Context, arg CreateExpectedRevenueEntryParams) error
 	CreateInboxEvent(ctx context.Context, arg CreateInboxEventParams) error
 	CreateInvoiceLine(ctx context.Context, arg CreateInvoiceLineParams) error
@@ -23,6 +25,8 @@ type Querier interface {
 	GetBillableItem(ctx context.Context, id string) (BillableItem, error)
 	GetBillableItemByCode(ctx context.Context, arg GetBillableItemByCodeParams) (BillableItem, error)
 	GetContract(ctx context.Context, id string) (Contract, error)
+	GetDocument(ctx context.Context, arg GetDocumentParams) (Document, error)
+	GetDocumentExtractionDraft(ctx context.Context, arg GetDocumentExtractionDraftParams) (DocumentExtractionDraft, error)
 	GetInboxEvent(ctx context.Context, arg GetInboxEventParams) (InboxEvent, error)
 	GetInvoiceBySourceExternal(ctx context.Context, arg GetInvoiceBySourceExternalParams) (Invoice, error)
 	GetLeakageCase(ctx context.Context, arg GetLeakageCaseParams) (LeakageCase, error)
@@ -32,6 +36,8 @@ type Querier interface {
 	ListCaseStatusHistoryByCase(ctx context.Context, caseID string) ([]CaseStatusHistory, error)
 	ListContractTerms(ctx context.Context, contractID string) ([]ContractTerm, error)
 	ListContractsByCustomer(ctx context.Context, arg ListContractsByCustomerParams) ([]Contract, error)
+	ListDocumentExtractionDrafts(ctx context.Context, arg ListDocumentExtractionDraftsParams) ([]DocumentExtractionDraft, error)
+	ListDocuments(ctx context.Context, arg ListDocumentsParams) ([]Document, error)
 	ListEffectiveContractTerms(ctx context.Context, arg ListEffectiveContractTermsParams) ([]ContractTerm, error)
 	ListExpectedRevenueByContractPeriod(ctx context.Context, arg ListExpectedRevenueByContractPeriodParams) ([]ExpectedRevenueEntry, error)
 	ListInvoiceLinesByInvoice(ctx context.Context, invoiceID string) ([]InvoiceLine, error)

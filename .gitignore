@@ -26,9 +26,11 @@ go.work.sum
 
 # env file
 .env
+infisical.import.env
 
 # Local SQLite database files
 local.db*
+data/
 
 # Local tool and build cache
 .cache/
@@ -42,4 +44,5 @@ bin/
 
 # cli
 .codex
+.infisical.json
 AGENTS.md

@@ -20,6 +20,70 @@ templ TenantSelector(tenantID string) {
 	</section>
 }
 
+templ DocumentUploadForm(tenantID string) {
+	<form class="run-form" action="/ui/documents" method="post" enctype="multipart/form-data">
+		<section class="form-section">
+			<h3>Контекст</h3>
+			<p class="hint">Загруженный документ становится immutable source. AI draft не попадает в core-таблицы без проверки оператора.</p>
+			<div class="form-grid">
+				<label>
+					<span>Tenant ID</span>
+					<input name="tenant_id" value={ tenantID } placeholder="uuid tenant" required/>
+				</label>
+				<label>
+					<span>Тип источника</span>
+					<select name="source_type">
+						<option value="mixed">Смешанный документ</option>
+						<option value="contract">Договор</option>
+						<option value="invoice">Счет</option>
+						<option value="usage_export">Usage export</option>
+						<option value="billing_export">Billing export</option>
+					</select>
+				</label>
+			</div>
+		</section>
+		<section class="form-section">
+			<h3>Файлы</h3>
+			<p class="hint">До 5 документов за загрузку, до 10 MiB каждый. Для первого AI extractor лучше подходят TXT, CSV и JSON.</p>
+			<label>
+				<span>Документы</span>
+				<input type="file" name="documents" multiple required/>
+			</label>
+		</section>
+		<div class="form-actions">
+			<button class="button primary" type="submit">Загрузить документы</button>
+		</div>
+	</form>
+}
+
+templ DocumentsList(data DocumentsPageData) {
+	if len(data.Documents) == 0 {
+		<div class="empty">Документов пока нет. Укажите tenant ID и загрузите первые файлы.</div>
+	} else {
+		<div class="record-list document-list">
+			for _, item := range data.Documents {
+				<article class="case-card">
+					<div>
+						<strong>{ item.FileName }</strong>
+						<small>{ item.ID }</small>
+					</div>
+					<div class="case-card-meta">
+						<span class={ item.StatusClass }>{ item.Status }</span>
+						<span>{ item.SourceType }</span>
+						<span>{ item.SizeLabel }</span>
+						<span>{ item.UploadedAt }</span>
+					</div>
+					<form action={ item.ExtractPath } method="post">
+						<input type="hidden" name="tenant_id" value={ item.TenantID }/>
+						<input type="hidden" name="draft_type" value="mixed_facts"/>
+						<button class="button secondary" type="submit">Извлечь draft</button>
+					</form>
+				</article>
+			}
+		</div>
+	}
+}
+
 templ LeakageTrend() {
 	<div class="trend-chart" aria-label="Динамика утечек за период">
 		<div class="chart-scale">

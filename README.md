@@ -40,7 +40,9 @@ task compose:up
 task compose:up-detached
 task compose:down
 task compose:logs
+task compose:config-infisical
 task compose:up-infisical
+task compose:up-infisical-detached
 ```
 
 `task run` открывает SQLite базу `./local.db`, применяет миграции
@@ -76,10 +78,17 @@ idempotency через `inbox_events` и вызывает ingestion/reconciliati
 - Kafka bootstrap для хоста: `localhost:9092`
 - Kafka UI: `http://localhost:8082`
 
-Проверка итоговой конфигурации:
+Проверка итоговой конфигурации при локальном `.env` или уже выставленных shell
+variables:
 
 ```bash
 task compose:config
+```
+
+Проверка итоговой конфигурации через Infisical Cloud UI:
+
+```bash
+INFISICAL_ENV=dev task compose:config-infisical
 ```
 
 Запуск в foreground:
@@ -94,6 +103,12 @@ task compose:up
 task compose:up-detached
 ```
 
+Запуск в фоне через Infisical:
+
+```bash
+INFISICAL_ENV=dev task compose:up-infisical-detached
+```
+
 Compose создает топики приложения явно через `kafka-init`:
 
 - `usage.records.v1`
@@ -102,8 +117,9 @@ Compose создает топики приложения явно через `ka
 - `reconciliation.run.completed.v1`
 - `leakage.case.created.v1`
 
-Переменные локального запуска описаны в `.env.example`. Файл `.env` остается
-локальным и не коммитится.
+Переменные compose-запуска описаны в `.env.example`. Для Infisical эти же имена
+нужно завести в Cloud UI выбранного окружения. Файл `.env` остается локальным и
+не коммитится.
 
 ## Secret Manager
 
@@ -116,15 +132,28 @@ INFISICAL_ENV=dev INFISICAL_PROJECT_ID=<project-id> task compose:up-infisical
 ```
 
 В этом режиме Infisical передает секреты процессу Docker Compose. Чтобы новый
-секрет дошел до контейнера приложения, его нужно явно добавить в `environment`
-сервиса `revenueleakageengine` в `docker-compose.yaml`.
+секрет или runtime-параметр дошел до контейнера, его нужно явно добавить в
+нужный блок `environment` или interpolation в `docker-compose.yaml`.
 
-В Infisical нужно хранить только секретные значения: будущие DSN, Kafka
-SASL/SSL credentials, API tokens и ключи внешних интеграций. Несекретные
-локальные параметры вроде портов, имени Kafka topic или `RLE_LOG_JSON` остаются
-в `.env.example` и compose defaults. Когда появятся production-секреты для
+Для compose-стека Infisical является единым источником конфигурации: и секреты,
+и несекретные runtime-параметры должны быть заведены в Cloud UI с теми же
+именами, что указаны в `.env.example`. `docker-compose.yaml` не использует
+локальные fallback defaults и завершится с ошибкой, если обязательной переменной
+нет в Infisical или shell environment. Когда появятся production-секреты для
 каждого сервиса, можно перейти на service-specific machine identity token в
 compose-переменной `INFISICAL_TOKEN_REVENUELEAKAGEENGINE`.
+
+Проверить, что Infisical отдает переменные:
+
+```bash
+INFISICAL_ENV=dev infisical run -- printenv | grep RLE_
+INFISICAL_ENV=dev infisical run -- docker compose config
+```
+
+Для первичного заполнения Cloud UI можно использовать локальный файл
+`infisical.import.env`: в Infisical открой `Upload Secrets`, выбери формат
+`.env` и загрузи файл. Значения в файле фейковые, после импорта замени в Cloud UI
+реальные секреты, например `RLE_NVIDIA_API_KEY`.
 
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 
@@ -144,9 +173,62 @@ goose -dir internal/platform/sqlite/migrations sqlite3 ./local.db up
 - `GET /ui/reconciliation` — форма запуска database-driven reconciliation.
 - `GET /ui/cases?tenant_id=<uuid>` — список leakage cases с htmx-фильтрами.
 - `GET /ui/cases/{case_id}?tenant_id=<uuid>` — карточка кейса, evidence, root causes, status history и htmx-actions.
+- `GET /ui/documents?tenant_id=<uuid>` — загрузка документов и запуск AI extraction draft для Sprint 8.
 
 UI handlers остаются тонким transport layer: формы мапятся в существующие app/service commands,
 а расчеты expected/actual revenue и lifecycle rules остаются в Go service/domain слоях.
+
+## Document Intake & AI
+
+Sprint 8 добавляет безопасный intake pipeline: оригинальные документы сохраняются
+как immutable source, AI создает draft JSON, а core-сервисы `contract`,
+`ingestion` и `reconciliation` получают данные только после будущего review/approve
+шага. AI не пишет напрямую в таблицы контрактов, usage, invoices, ledger или
+reconciliation.
+
+Лимиты MVP:
+
+- максимум 5 документов за один upload
+- максимум 10 MiB на один файл
+- хранилище документов: `/data/documents` в compose, `./data/documents` при прямом `go run`
+- текущий NVIDIA extractor работает с текстовыми документами: TXT, CSV, JSON
+
+Переменные:
+
+```bash
+RLE_AI_PROVIDER=nvidia
+RLE_NVIDIA_API_KEY=<api-key>
+RLE_NVIDIA_MODEL=nvidia/llama-3.1-nemotron-nano-8b-v1
+RLE_DOCUMENT_STORAGE_PATH=/data/documents
+RLE_DOCUMENT_MAX_FILES_PER_UPLOAD=5
+RLE_DOCUMENT_MAX_FILE_BYTES=10485760
+```
+
+Upload через API:
+
+```bash
+curl -sS -X POST http://localhost:8080/api/v1/documents \
+  -F tenant_id=11111111-1111-1111-1111-111111111111 \
+  -F source_type=mixed \
+  -F documents=@./examples/invoice.txt
+```
+
+Запуск extraction draft:
+
+```bash
+curl -sS -X POST http://localhost:8080/api/v1/documents/<document_id>/extract \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tenant_id": "11111111-1111-1111-1111-111111111111",
+    "draft_type": "mixed_facts"
+  }'
+```
+
+Model plan:
+
+- `nvidia/llama-3.1-nemotron-nano-8b-v1` — текстовый extractor MVP.
+- `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` — следующий шаг для OCR/image/PDF сценариев.
+- `nvidia/llama-3.3-nemotron-super-49b-v1.5` — опциональный валидатор draft JSON.
 
 ## Money convention
 

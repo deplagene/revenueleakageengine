@@ -146,6 +146,7 @@
 
 - **Сценарий взаимодействия**:
   - Клиент загружает договоры, счета, usage exports или billing exports через будущий client portal/API.
+  - На первом внутреннем UI-срезе оператор может загрузить до 5 документов за один upload, каждый до 10 MiB.
   - Система сохраняет оригинальный документ как immutable source: `document_id`, `tenant_id`, `source_type`, `file_hash`, `uploaded_at`.
   - AI/OCR/parser извлекает draft facts: contract terms, billable items, usage records, invoices.
   - Результат сохраняется как structured JSON draft с confidence score и ссылками на evidence: page, row, field, document_id.
@@ -163,6 +164,10 @@
   - `internal/platform/ai`: provider adapter для LLM/OCR extraction.
   - `internal/platform/storage`: локальное файловое хранилище для MVP, позже S3-compatible storage.
   - Существующие сервисы остаются владельцами бизнес-данных; document intake только готовит проверенный вход.
+- **NVIDIA model plan**:
+  - Text extraction MVP: `nvidia/llama-3.1-nemotron-nano-8b-v1`.
+  - OCR/image document extraction next: `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`.
+  - Optional higher-quality validator: `nvidia/llama-3.3-nemotron-super-49b-v1.5`.
 - **Границы**:
   - ИИ не пишет напрямую в таблицы контрактов, usage, invoices, ledger или reconciliation.
   - ИИ не принимает финансовые решения и не считает expected/actual revenue.
@@ -216,32 +221,32 @@
 
 ---
 
-## Спринт 10: Self-host Infisical и управление секретами
+## Спринт 10: UI Redesign & Operator Experience
 
-**Цель:** Подготовить безопасное управление runtime-секретами для локальной и будущей production-инфраструктуры без хранения секретов в репозитории.
+**Цель:** Переработать существующий htmx + templ интерфейс в цельный production-ready внутренний SaaS UI, который покрывает сверки, кейсы, document intake и будущие AI suggestions без визуального шума и без SPA.
 
-- **Self-host стек**:
-  - Добавить отдельный compose/profile для Infisical, Postgres и Redis.
-  - Развести сеть Infisical и сеть приложения так, чтобы сервис получал только нужные env secrets.
-  - Описать bootstrap: первый admin, project, environments `dev/stage/prod`, service token или machine identity.
-- **Secret model**:
-  - Секреты хранить в Infisical: будущие database DSN, Kafka SASL/SSL credentials, object storage keys, AI provider keys, external API tokens.
-  - Несекретные параметры оставить в `.env.example` и `docker-compose.yaml`: порты, topic names, локальные image tags, логирование.
-  - Утвердить naming convention: `RLE_<AREA>_<NAME>`, например `RLE_KAFKA_SASL_USERNAME`.
-- **Интеграция с сервисом**:
-  - Сервис продолжает читать конфигурацию только из environment variables.
-  - Для локального запуска использовать `infisical run -- docker compose up`.
-  - Для production-подхода подготовить service-specific machine identity и короткоживущие токены.
-- **Security boundaries**:
-  - Не логировать secret values и DSN целиком.
-  - Не передавать секреты в domain/service слои.
-  - Не коммитить `.env`, Infisical tokens, encryption keys или dump секретов.
-  - Rotation должна проходить без пересборки Docker image.
-- **Документация**:
-  - Описать Cloud UI flow: project -> environment -> secrets.
-  - Описать self-host startup, backup/restore Postgres и recovery plan.
-  - Добавить troubleshooting для отсутствующих секретов и неверного environment.
+- **Визуальная система**:
+  - Закрепить теплую минималистичную палитру, мягкие карточки, тонкие бордеры, читаемую типографику и единый набор spacing tokens.
+  - Оставить горизонтальную навигацию на desktop и compact/bottom navigation на mobile.
+  - Унифицировать кнопки, поля, селекты, status badges, metric cards, empty states, таблицы и mobile cards.
+  - Весь UI-текст держать на русском, без технических англоязычных label там, где оператору нужна понятная формулировка.
+- **Экраны**:
+  - `Обзор`: tenant selector, ключевые метрики, последние сверки, последние кейсы, primary CTA `Запустить сверку`.
+  - `Запуск сверки`: понятная форма по секциям `Контекст`, `Период`, `Параметры`, `Trace`, recent runs и leakage cases.
+  - `Кейсы`: фильтры, summary cards, список/таблица кейсов, detail preview и явные действия по кейсу.
+  - `Документы`: upload документов, ограничения файлов, extraction draft status, review/approve/reject flow.
+  - `AI insights`: визуально отделить AI suggestion от подтвержденных оператором выводов.
+- **UX-границы**:
+  - UI не должен заставлять клиента вручную вводить технические данные; technical fields допустимы только для внутреннего оператора/dev режима.
+  - Клиентский путь: upload документов -> AI draft JSON -> review/approve -> ingestion/reconciliation.
+  - Операторский путь: контроль tenant/contract, запуск сверки, расследование кейсов, подтверждение AI/draft данных.
+  - На mobile заменить плотные таблицы на вертикальные карточки с крупными tap targets.
+- **Архитектура**:
+  - Сохранить server-rendered подход: `templ` компоненты + `htmx` partial updates.
+  - Выделить reusable view components и page layouts, чтобы не дублировать HTML/CSS между страницами.
+  - UI handlers остаются на gateway boundary и вызывают app use cases; money/reconciliation logic не переносить в templates.
+  - Добавить snapshot/handler tests для ключевых UI состояний: empty, loading/error, success, validation errors.
 - **Критерий готовности**:
-  - Можно поднять self-host Infisical локально отдельной командой.
-  - Можно запустить `revenueleakageengine` через Infisical-injected env.
-  - В README описано, какие секреты обязательны, какие optional и где их смотреть в UI.
+  - Desktop и mobile версии основных экранов выглядят как единый продукт.
+  - Пользователь понимает основной сценарий без знания внутренней архитектуры.
+  - `task templ-generate`, `task test` и `task lint` проходят после редизайна.

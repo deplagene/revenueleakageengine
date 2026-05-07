@@ -339,6 +339,16 @@ tasks:
     cmds:
       - "{{.DOCKER_COMPOSE}} logs -f"
 
+  compose:config-infisical:
+    desc: "Проверяет docker-compose.yaml с переменными из Infisical"
+    cmds:
+      - |
+        if [ -n "${INFISICAL_PROJECT_ID:-}" ]; then
+          infisical run --env="${INFISICAL_ENV:-dev}" --projectId="${INFISICAL_PROJECT_ID}" -- {{.DOCKER_COMPOSE}} config
+        else
+          infisical run --env="${INFISICAL_ENV:-dev}" -- {{.DOCKER_COMPOSE}} config
+        fi
+
   compose:up-infisical:
     desc: "Запускает Docker Compose через Infisical CLI с секретами из выбранного окружения"
     deps: [templ-generate]
@@ -348,4 +358,15 @@ tasks:
           infisical run --env="${INFISICAL_ENV:-dev}" --projectId="${INFISICAL_PROJECT_ID}" -- {{.DOCKER_COMPOSE}} up --build
         else
           infisical run --env="${INFISICAL_ENV:-dev}" -- {{.DOCKER_COMPOSE}} up --build
+        fi
+
+  compose:up-infisical-detached:
+    desc: "Запускает Docker Compose в фоне через Infisical CLI"
+    deps: [templ-generate]
+    cmds:
+      - |
+        if [ -n "${INFISICAL_PROJECT_ID:-}" ]; then
+          infisical run --env="${INFISICAL_ENV:-dev}" --projectId="${INFISICAL_PROJECT_ID}" -- {{.DOCKER_COMPOSE}} up -d --build
+        else
+          infisical run --env="${INFISICAL_ENV:-dev}" -- {{.DOCKER_COMPOSE}} up -d --build
         fi
