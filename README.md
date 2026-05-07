@@ -40,7 +40,9 @@ task compose:up
 task compose:up-detached
 task compose:down
 task compose:logs
+task compose:config-infisical
 task compose:up-infisical
+task compose:up-infisical-detached
 ```
 
 `task run` открывает SQLite базу `./local.db`, применяет миграции
@@ -76,10 +78,17 @@ idempotency через `inbox_events` и вызывает ingestion/reconciliati
 - Kafka bootstrap для хоста: `localhost:9092`
 - Kafka UI: `http://localhost:8082`
 
-Проверка итоговой конфигурации:
+Проверка итоговой конфигурации при локальном `.env` или уже выставленных shell
+variables:
 
 ```bash
 task compose:config
+```
+
+Проверка итоговой конфигурации через Infisical Cloud UI:
+
+```bash
+INFISICAL_ENV=dev task compose:config-infisical
 ```
 
 Запуск в foreground:
@@ -94,6 +103,12 @@ task compose:up
 task compose:up-detached
 ```
 
+Запуск в фоне через Infisical:
+
+```bash
+INFISICAL_ENV=dev task compose:up-infisical-detached
+```
+
 Compose создает топики приложения явно через `kafka-init`:
 
 - `usage.records.v1`
@@ -102,8 +117,9 @@ Compose создает топики приложения явно через `ka
 - `reconciliation.run.completed.v1`
 - `leakage.case.created.v1`
 
-Переменные локального запуска описаны в `.env.example`. Файл `.env` остается
-локальным и не коммитится.
+Переменные compose-запуска описаны в `.env.example`. Для Infisical эти же имена
+нужно завести в Cloud UI выбранного окружения. Файл `.env` остается локальным и
+не коммитится.
 
 ## Secret Manager
 
@@ -116,15 +132,23 @@ INFISICAL_ENV=dev INFISICAL_PROJECT_ID=<project-id> task compose:up-infisical
 ```
 
 В этом режиме Infisical передает секреты процессу Docker Compose. Чтобы новый
-секрет дошел до контейнера приложения, его нужно явно добавить в `environment`
-сервиса `revenueleakageengine` в `docker-compose.yaml`.
+секрет или runtime-параметр дошел до контейнера, его нужно явно добавить в
+нужный блок `environment` или interpolation в `docker-compose.yaml`.
 
-В Infisical нужно хранить только секретные значения: будущие DSN, Kafka
-SASL/SSL credentials, API tokens и ключи внешних интеграций. Несекретные
-локальные параметры вроде портов, имени Kafka topic или `RLE_LOG_JSON` остаются
-в `.env.example` и compose defaults. Когда появятся production-секреты для
+Для compose-стека Infisical является единым источником конфигурации: и секреты,
+и несекретные runtime-параметры должны быть заведены в Cloud UI с теми же
+именами, что указаны в `.env.example`. `docker-compose.yaml` не использует
+локальные fallback defaults и завершится с ошибкой, если обязательной переменной
+нет в Infisical или shell environment. Когда появятся production-секреты для
 каждого сервиса, можно перейти на service-specific machine identity token в
 compose-переменной `INFISICAL_TOKEN_REVENUELEAKAGEENGINE`.
+
+Проверить, что Infisical отдает переменные:
+
+```bash
+INFISICAL_ENV=dev infisical run -- printenv | grep RLE_
+INFISICAL_ENV=dev infisical run -- docker compose config
+```
 
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 
@@ -161,7 +185,7 @@ reconciliation.
 
 - максимум 5 документов за один upload
 - максимум 10 MiB на один файл
-- локальное хранилище: `./data/documents`
+- хранилище документов: `/data/documents` в compose, `./data/documents` при прямом `go run`
 - текущий NVIDIA extractor работает с текстовыми документами: TXT, CSV, JSON
 
 Переменные:
@@ -170,7 +194,7 @@ reconciliation.
 RLE_AI_PROVIDER=nvidia
 RLE_NVIDIA_API_KEY=<api-key>
 RLE_NVIDIA_MODEL=nvidia/llama-3.1-nemotron-nano-8b-v1
-RLE_DOCUMENT_STORAGE_PATH=./data/documents
+RLE_DOCUMENT_STORAGE_PATH=/data/documents
 RLE_DOCUMENT_MAX_FILES_PER_UPLOAD=5
 RLE_DOCUMENT_MAX_FILE_BYTES=10485760
 ```
