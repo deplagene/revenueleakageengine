@@ -43,4 +43,5 @@ bin/
 
 # cli
 .codex
+.infisical.json
 AGENTS.md
