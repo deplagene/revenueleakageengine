@@ -35,8 +35,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - revenueleakageengine-net
@@ -87,15 +85,33 @@ services:
         condition: service_healthy
     command:
       - bash
-      - -ec
+      - -c
       - |
+        set -u
+        broker="kafka:${KAFKA_INTERNAL_PORT:-29092}"
+        topics="
+          usage.records.v1
+          billing.invoices.v1
+          reconciliation.run.requested.v1
+          reconciliation.run.completed.v1
+          leakage.case.created.v1
+        "
         echo "Creating Revenue Leakage Engine Kafka topics..."
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic usage.records.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic billing.invoices.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic reconciliation.run.requested.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic reconciliation.run.completed.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --create --if-not-exists --topic leakage.case.created.v1 --partitions 3 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:${KAFKA_INTERNAL_PORT:-29092} --list
+        for topic in $$topics; do
+          created=0
+          for attempt in 1 2 3 4 5; do
+            if kafka-topics --bootstrap-server "$$broker" --create --if-not-exists --topic "$$topic" --partitions 3 --replication-factor 1; then
+              created=1
+              break
+            fi
+            echo "Topic $$topic is not ready yet, retry $$attempt/5..."
+            sleep 2
+          done
+          if [ "$$created" -ne 1 ]; then
+            echo "WARNING: topic $$topic was not created. The app can still start; check Kafka logs."
+          fi
+        done
+        kafka-topics --bootstrap-server "$$broker" --list || true
     networks:
       - revenueleakageengine-net
 
