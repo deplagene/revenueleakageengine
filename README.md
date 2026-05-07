@@ -150,6 +150,11 @@ INFISICAL_ENV=dev infisical run -- printenv | grep RLE_
 INFISICAL_ENV=dev infisical run -- docker compose config
 ```
 
+Для первичного заполнения Cloud UI можно использовать локальный файл
+`infisical.import.env`: в Infisical открой `Upload Secrets`, выбери формат
+`.env` и загрузи файл. Значения в файле фейковые, после импорта замени в Cloud UI
+реальные секреты, например `RLE_NVIDIA_API_KEY`.
+
 Если Task CLI недоступен, можно выполнить эквивалентные Go/Goose команды напрямую:
 
 ```bash

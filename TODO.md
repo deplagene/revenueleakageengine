@@ -218,3 +218,35 @@
   - Для leakage case можно получить AI summary и next actions.
   - Все AI ответы сохраняются с prompt version и input hash.
   - В UI видно, какие выводы являются AI suggestion, а какие подтверждены оператором.
+
+---
+
+## Спринт 10: UI Redesign & Operator Experience
+
+**Цель:** Переработать существующий htmx + templ интерфейс в цельный production-ready внутренний SaaS UI, который покрывает сверки, кейсы, document intake и будущие AI suggestions без визуального шума и без SPA.
+
+- **Визуальная система**:
+  - Закрепить теплую минималистичную палитру, мягкие карточки, тонкие бордеры, читаемую типографику и единый набор spacing tokens.
+  - Оставить горизонтальную навигацию на desktop и compact/bottom navigation на mobile.
+  - Унифицировать кнопки, поля, селекты, status badges, metric cards, empty states, таблицы и mobile cards.
+  - Весь UI-текст держать на русском, без технических англоязычных label там, где оператору нужна понятная формулировка.
+- **Экраны**:
+  - `Обзор`: tenant selector, ключевые метрики, последние сверки, последние кейсы, primary CTA `Запустить сверку`.
+  - `Запуск сверки`: понятная форма по секциям `Контекст`, `Период`, `Параметры`, `Trace`, recent runs и leakage cases.
+  - `Кейсы`: фильтры, summary cards, список/таблица кейсов, detail preview и явные действия по кейсу.
+  - `Документы`: upload документов, ограничения файлов, extraction draft status, review/approve/reject flow.
+  - `AI insights`: визуально отделить AI suggestion от подтвержденных оператором выводов.
+- **UX-границы**:
+  - UI не должен заставлять клиента вручную вводить технические данные; technical fields допустимы только для внутреннего оператора/dev режима.
+  - Клиентский путь: upload документов -> AI draft JSON -> review/approve -> ingestion/reconciliation.
+  - Операторский путь: контроль tenant/contract, запуск сверки, расследование кейсов, подтверждение AI/draft данных.
+  - На mobile заменить плотные таблицы на вертикальные карточки с крупными tap targets.
+- **Архитектура**:
+  - Сохранить server-rendered подход: `templ` компоненты + `htmx` partial updates.
+  - Выделить reusable view components и page layouts, чтобы не дублировать HTML/CSS между страницами.
+  - UI handlers остаются на gateway boundary и вызывают app use cases; money/reconciliation logic не переносить в templates.
+  - Добавить snapshot/handler tests для ключевых UI состояний: empty, loading/error, success, validation errors.
+- **Критерий готовности**:
+  - Desktop и mobile версии основных экранов выглядят как единый продукт.
+  - Пользователь понимает основной сценарий без знания внутренней архитектуры.
+  - `task templ-generate`, `task test` и `task lint` проходят после редизайна.
