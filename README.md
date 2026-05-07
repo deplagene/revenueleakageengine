@@ -144,9 +144,62 @@ goose -dir internal/platform/sqlite/migrations sqlite3 ./local.db up
 - `GET /ui/reconciliation` — форма запуска database-driven reconciliation.
 - `GET /ui/cases?tenant_id=<uuid>` — список leakage cases с htmx-фильтрами.
 - `GET /ui/cases/{case_id}?tenant_id=<uuid>` — карточка кейса, evidence, root causes, status history и htmx-actions.
+- `GET /ui/documents?tenant_id=<uuid>` — загрузка документов и запуск AI extraction draft для Sprint 8.
 
 UI handlers остаются тонким transport layer: формы мапятся в существующие app/service commands,
 а расчеты expected/actual revenue и lifecycle rules остаются в Go service/domain слоях.
+
+## Document Intake & AI
+
+Sprint 8 добавляет безопасный intake pipeline: оригинальные документы сохраняются
+как immutable source, AI создает draft JSON, а core-сервисы `contract`,
+`ingestion` и `reconciliation` получают данные только после будущего review/approve
+шага. AI не пишет напрямую в таблицы контрактов, usage, invoices, ledger или
+reconciliation.
+
+Лимиты MVP:
+
+- максимум 5 документов за один upload
+- максимум 10 MiB на один файл
+- локальное хранилище: `./data/documents`
+- текущий NVIDIA extractor работает с текстовыми документами: TXT, CSV, JSON
+
+Переменные:
+
+```bash
+RLE_AI_PROVIDER=nvidia
+RLE_NVIDIA_API_KEY=<api-key>
+RLE_NVIDIA_MODEL=nvidia/llama-3.1-nemotron-nano-8b-v1
+RLE_DOCUMENT_STORAGE_PATH=./data/documents
+RLE_DOCUMENT_MAX_FILES_PER_UPLOAD=5
+RLE_DOCUMENT_MAX_FILE_BYTES=10485760
+```
+
+Upload через API:
+
+```bash
+curl -sS -X POST http://localhost:8080/api/v1/documents \
+  -F tenant_id=11111111-1111-1111-1111-111111111111 \
+  -F source_type=mixed \
+  -F documents=@./examples/invoice.txt
+```
+
+Запуск extraction draft:
+
+```bash
+curl -sS -X POST http://localhost:8080/api/v1/documents/<document_id>/extract \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tenant_id": "11111111-1111-1111-1111-111111111111",
+    "draft_type": "mixed_facts"
+  }'
+```
+
+Model plan:
+
+- `nvidia/llama-3.1-nemotron-nano-8b-v1` — текстовый extractor MVP.
+- `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` — следующий шаг для OCR/image/PDF сценариев.
+- `nvidia/llama-3.3-nemotron-super-49b-v1.5` — опциональный валидатор draft JSON.
 
 ## Money convention
 

@@ -146,6 +146,7 @@
 
 - **Сценарий взаимодействия**:
   - Клиент загружает договоры, счета, usage exports или billing exports через будущий client portal/API.
+  - На первом внутреннем UI-срезе оператор может загрузить до 5 документов за один upload, каждый до 10 MiB.
   - Система сохраняет оригинальный документ как immutable source: `document_id`, `tenant_id`, `source_type`, `file_hash`, `uploaded_at`.
   - AI/OCR/parser извлекает draft facts: contract terms, billable items, usage records, invoices.
   - Результат сохраняется как structured JSON draft с confidence score и ссылками на evidence: page, row, field, document_id.
@@ -163,6 +164,10 @@
   - `internal/platform/ai`: provider adapter для LLM/OCR extraction.
   - `internal/platform/storage`: локальное файловое хранилище для MVP, позже S3-compatible storage.
   - Существующие сервисы остаются владельцами бизнес-данных; document intake только готовит проверенный вход.
+- **NVIDIA model plan**:
+  - Text extraction MVP: `nvidia/llama-3.1-nemotron-nano-8b-v1`.
+  - OCR/image document extraction next: `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`.
+  - Optional higher-quality validator: `nvidia/llama-3.3-nemotron-super-49b-v1.5`.
 - **Границы**:
   - ИИ не пишет напрямую в таблицы контрактов, usage, invoices, ledger или reconciliation.
   - ИИ не принимает финансовые решения и не считает expected/actual revenue.
