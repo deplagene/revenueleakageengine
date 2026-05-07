@@ -102,6 +102,38 @@ type CustomerAccount struct {
 	CreatedAt        string         `json:"created_at"`
 }
 
+type Document struct {
+	ID           string `json:"id"`
+	TenantID     string `json:"tenant_id"`
+	SourceType   string `json:"source_type"`
+	FileName     string `json:"file_name"`
+	ContentType  string `json:"content_type"`
+	SizeBytes    int64  `json:"size_bytes"`
+	Sha256Hash   string `json:"sha256_hash"`
+	StorageKey   string `json:"storage_key"`
+	Status       string `json:"status"`
+	UploadedAt   string `json:"uploaded_at"`
+	MetadataJson string `json:"metadata_json"`
+}
+
+type DocumentExtractionDraft struct {
+	ID                         string         `json:"id"`
+	DocumentID                 string         `json:"document_id"`
+	TenantID                   string         `json:"tenant_id"`
+	DraftType                  string         `json:"draft_type"`
+	Status                     string         `json:"status"`
+	Model                      string         `json:"model"`
+	PromptVersion              string         `json:"prompt_version"`
+	InputHash                  string         `json:"input_hash"`
+	OutputJson                 string         `json:"output_json"`
+	EvidenceJson               string         `json:"evidence_json"`
+	ConfidenceScoreBasisPoints int64          `json:"confidence_score_basis_points"`
+	CreatedAt                  string         `json:"created_at"`
+	ReviewedBy                 string         `json:"reviewed_by"`
+	ReviewedAt                 sql.NullString `json:"reviewed_at"`
+	RejectionReason            string         `json:"rejection_reason"`
+}
+
 type ExpectedRevenueEntry struct {
 	ID                       string `json:"id"`
 	TenantID                 string `json:"tenant_id"`
