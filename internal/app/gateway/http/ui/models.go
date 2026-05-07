@@ -89,6 +89,27 @@ type CaseDetailPageData struct {
 	Panel CaseDetailPanelData
 }
 
+type DocumentsPageData struct {
+	Title        string
+	TenantID     string
+	Error        string
+	UploadResult string
+	Documents    []DocumentRow
+}
+
+type DocumentRow struct {
+	ID          string
+	TenantID    string
+	SourceType  string
+	FileName    string
+	ContentType string
+	SizeLabel   string
+	Status      string
+	StatusClass string
+	UploadedAt  string
+	ExtractPath string
+}
+
 type CaseDetailPanelData struct {
 	TenantID      string
 	Case          CaseRow

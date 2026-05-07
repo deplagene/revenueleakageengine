@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	stdhttp "net/http"
 	"strconv"
 	"strings"
@@ -13,10 +14,13 @@ import (
 
 	"github.com/a-h/templ"
 	caseapp "github.com/deplagene/revenueleakageengine/internal/app/case"
+	documentapp "github.com/deplagene/revenueleakageengine/internal/app/document"
 	"github.com/deplagene/revenueleakageengine/internal/app/gateway/http/ui"
 	appreconciliation "github.com/deplagene/revenueleakageengine/internal/app/reconciliation"
+	documentdomain "github.com/deplagene/revenueleakageengine/internal/domain/document"
 	"github.com/deplagene/revenueleakageengine/internal/domain/leakage"
 	"github.com/deplagene/revenueleakageengine/internal/domain/valueobject"
+	documentservice "github.com/deplagene/revenueleakageengine/internal/service/document"
 	reconciliationservice "github.com/deplagene/revenueleakageengine/internal/service/reconciliation"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -39,6 +43,11 @@ func (h *Handler) registerUIRoutes(router chi.Router) {
 	router.Get("/ui/cases/{case_id}", h.handleUICaseDetail)
 	router.Post("/ui/cases/{case_id}/status", h.handleUICaseStatus)
 	router.Post("/ui/cases/{case_id}/assignee", h.handleUICaseAssignee)
+	if h.documentQueries != nil && h.documentCommands != nil {
+		router.Get("/ui/documents", h.handleUIDocuments)
+		router.Post("/ui/documents", h.handleUIDocumentUpload)
+		router.Post("/ui/documents/{document_id}/extract", h.handleUIDocumentExtract)
+	}
 }
 
 func (h *Handler) handleUIDashboard(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -76,6 +85,81 @@ func (h *Handler) handleUICases(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	}
 
 	renderUI(w, r, ui.CasesPage(newCasesPageData(table)))
+}
+
+func (h *Handler) handleUIDocuments(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	renderUI(w, r, ui.DocumentsPage(h.documentsPageData(r, "")))
+}
+
+func (h *Handler) handleUIDocumentUpload(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	cmd, err := uploadDocumentsCommandFromForm(r)
+	if err != nil {
+		data := h.documentsPageData(r, "")
+		data.Error = err.Error()
+		renderUI(w, r, ui.DocumentsPage(data))
+		return
+	}
+
+	result, err := h.documentCommands.UploadDocuments(r.Context(), cmd)
+	if err != nil {
+		data := h.documentsPageData(r, "")
+		data.Error = err.Error()
+		renderUI(w, r, ui.DocumentsPage(data))
+		return
+	}
+
+	query := r.Clone(r.Context())
+	values := query.URL.Query()
+	values.Set("tenant_id", cmd.TenantID.String())
+	query.URL.RawQuery = values.Encode()
+
+	message := fmt.Sprintf("Загружено документов: %d", len(result.Documents))
+	renderUI(w, r, ui.DocumentsPage(h.documentsPageData(query, message)))
+}
+
+func (h *Handler) handleUIDocumentExtract(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	if err := r.ParseForm(); err != nil {
+		data := h.documentsPageData(r, "")
+		data.Error = err.Error()
+		renderUI(w, r, ui.DocumentsPage(data))
+		return
+	}
+
+	tenantID, err := parseUUID("tenant_id", r.PostForm.Get("tenant_id"))
+	if err != nil {
+		data := h.documentsPageData(r, "")
+		data.Error = err.Error()
+		renderUI(w, r, ui.DocumentsPage(data))
+		return
+	}
+	documentID, err := parseUUID("document_id", chi.URLParam(r, "document_id"))
+	if err != nil {
+		data := h.documentsPageData(r, "")
+		data.Error = err.Error()
+		renderUI(w, r, ui.DocumentsPage(data))
+		return
+	}
+	draftType := documentdomain.DraftType(strings.TrimSpace(r.PostForm.Get("draft_type")))
+	if draftType == "" {
+		draftType = documentdomain.DraftTypeMixedFacts
+	}
+
+	_, err = h.documentCommands.ExtractDocumentFacts(r.Context(), documentapp.ExtractDocumentFactsCommand{
+		TenantID:   tenantID,
+		DocumentID: documentID,
+		DraftType:  draftType,
+	})
+	query := r.Clone(r.Context())
+	values := query.URL.Query()
+	values.Set("tenant_id", tenantID.String())
+	query.URL.RawQuery = values.Encode()
+
+	data := h.documentsPageData(query, "Draft JSON создан и ожидает проверки оператора.")
+	if err != nil {
+		data.UploadResult = ""
+		data.Error = err.Error()
+	}
+	renderUI(w, r, ui.DocumentsPage(data))
 }
 
 func (h *Handler) handleUICaseDetail(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -220,6 +304,83 @@ func (h *Handler) dashboardPageData(r *stdhttp.Request) ui.DashboardPageData {
 	}
 
 	return data
+}
+
+func (h *Handler) documentsPageData(r *stdhttp.Request, uploadResult string) ui.DocumentsPageData {
+	tenantRaw := strings.TrimSpace(r.URL.Query().Get("tenant_id"))
+	data := ui.DocumentsPageData{
+		Title:        "Документы",
+		TenantID:     tenantRaw,
+		UploadResult: uploadResult,
+	}
+	if tenantRaw == "" {
+		return data
+	}
+
+	tenantID, err := parseUUID("tenant_id", tenantRaw)
+	if err != nil {
+		data.Error = err.Error()
+		return data
+	}
+
+	documents, err := h.documentQueries.ListDocuments(r.Context(), documentservice.ListDocumentsCommand{
+		TenantID: tenantID,
+		Limit:    documentservice.DefaultListLimit,
+	})
+	if err != nil {
+		data.Error = err.Error()
+		return data
+	}
+	data.Documents = newDocumentRows(documents)
+	return data
+}
+
+func uploadDocumentsCommandFromForm(r *stdhttp.Request) (documentapp.UploadDocumentsCommand, error) {
+	if err := r.ParseMultipartForm(maxMultipartMemory); err != nil {
+		return documentapp.UploadDocumentsCommand{}, fmt.Errorf("parse multipart form: %w", err)
+	}
+
+	tenantID, err := parseUUID("tenant_id", r.FormValue("tenant_id"))
+	if err != nil {
+		return documentapp.UploadDocumentsCommand{}, err
+	}
+	sourceType := documentdomain.SourceType(strings.TrimSpace(r.FormValue("source_type")))
+	if sourceType == "" {
+		sourceType = documentdomain.SourceTypeMixed
+	}
+
+	headers := r.MultipartForm.File["documents"]
+	files := make([]documentapp.UploadFile, 0, len(headers))
+	for _, header := range headers {
+		file, err := header.Open()
+		if err != nil {
+			return documentapp.UploadDocumentsCommand{}, fmt.Errorf("open uploaded document: %w", err)
+		}
+		content, readErr := io.ReadAll(io.LimitReader(file, documentapp.DefaultMaxFileBytes+1))
+		closeErr := file.Close()
+		if readErr != nil {
+			return documentapp.UploadDocumentsCommand{}, fmt.Errorf("read uploaded document: %w", readErr)
+		}
+		if closeErr != nil {
+			return documentapp.UploadDocumentsCommand{}, fmt.Errorf("close uploaded document: %w", closeErr)
+		}
+
+		contentType := header.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = stdhttp.DetectContentType(content)
+		}
+		files = append(files, documentapp.UploadFile{
+			FileName:    header.Filename,
+			ContentType: contentType,
+			Content:     content,
+		})
+	}
+
+	return documentapp.UploadDocumentsCommand{
+		TenantID:   tenantID,
+		SourceType: sourceType,
+		Files:      files,
+	}, nil
 }
 
 func defaultRunFormData(tenantID string) ui.RunFormData {
@@ -541,6 +702,65 @@ func newRunRows(runs []reconciliationservice.ReconciliationRunSummary) []ui.RunR
 	}
 
 	return rows
+}
+
+func newDocumentRows(documents []documentdomain.Document) []ui.DocumentRow {
+	rows := make([]ui.DocumentRow, 0, len(documents))
+	for _, doc := range documents {
+		rows = append(rows, ui.DocumentRow{
+			ID:          doc.ID.String(),
+			TenantID:    doc.TenantID.String(),
+			SourceType:  sourceTypeLabel(doc.SourceType),
+			FileName:    doc.FileName,
+			ContentType: doc.ContentType,
+			SizeLabel:   formatBytes(doc.SizeBytes),
+			Status:      documentStatusLabel(doc.Status),
+			StatusClass: ui.StatusClass(string(doc.Status)),
+			UploadedAt:  ui.FormatTime(doc.UploadedAt),
+			ExtractPath: "/ui/documents/" + doc.ID.String() + "/extract",
+		})
+	}
+	return rows
+}
+
+func sourceTypeLabel(value documentdomain.SourceType) string {
+	switch value {
+	case documentdomain.SourceTypeContract:
+		return "Договор"
+	case documentdomain.SourceTypeInvoice:
+		return "Счет"
+	case documentdomain.SourceTypeUsageExport:
+		return "Usage export"
+	case documentdomain.SourceTypeBillingExport:
+		return "Billing export"
+	case documentdomain.SourceTypeMixed:
+		return "Смешанный"
+	default:
+		return string(value)
+	}
+}
+
+func documentStatusLabel(value documentdomain.Status) string {
+	switch value {
+	case documentdomain.StatusUploaded:
+		return "Загружен"
+	case documentdomain.StatusExtracted:
+		return "Извлечен"
+	case documentdomain.StatusFailed:
+		return "Ошибка"
+	default:
+		return string(value)
+	}
+}
+
+func formatBytes(value int64) string {
+	if value < 1024 {
+		return fmt.Sprintf("%d B", value)
+	}
+	if value < 1024*1024 {
+		return fmt.Sprintf("%.1f KiB", float64(value)/1024)
+	}
+	return fmt.Sprintf("%.1f MiB", float64(value)/(1024*1024))
 }
 
 func totalLeakageLabel(runs []reconciliationservice.ReconciliationRunSummary) string {

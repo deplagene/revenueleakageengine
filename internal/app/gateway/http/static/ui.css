@@ -350,6 +350,7 @@ label span {
 
 .dashboard-grid,
 .reconciliation-layout,
+.documents-layout,
 .cases-layout,
 .split {
   display: grid;
@@ -363,6 +364,11 @@ label span {
 
 .reconciliation-layout {
   grid-template-columns: minmax(0, 1.08fr) minmax(22rem, 0.92fr);
+  align-items: start;
+}
+
+.documents-layout {
+  grid-template-columns: minmax(20rem, 0.72fr) minmax(0, 1.28fr);
   align-items: start;
 }
 
@@ -580,6 +586,15 @@ textarea:focus {
   border-radius: var(--radius-md);
 }
 
+.document-list .case-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.document-list form {
+  justify-self: end;
+}
+
 .run-card:hover,
 .case-card:hover {
   border-color: var(--line-strong);
@@ -723,12 +738,15 @@ td a {
 }
 
 .status-resolved,
-.status-completed {
+.status-completed,
+.status-uploaded,
+.status-extracted {
   color: var(--success);
   background: var(--success-soft);
 }
 
-.status-dismissed {
+.status-dismissed,
+.status-failed {
   color: #625b51;
   background: #e8e2d8;
 }
@@ -921,6 +939,7 @@ pre {
   .tenant-card,
   .dashboard-grid,
   .reconciliation-layout,
+  .documents-layout,
   .cases-layout,
   .split,
   .split.tight,
@@ -937,6 +956,14 @@ pre {
   .metric-grid,
   .compact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .document-list .case-card {
+    grid-template-columns: 1fr;
+  }
+
+  .document-list form {
+    justify-self: stretch;
   }
 
   .filter-search {
