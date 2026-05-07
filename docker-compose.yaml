@@ -17,7 +17,7 @@ services:
       RLE_GRPC_ADDR: "${RLE_GRPC_ADDR:?set RLE_GRPC_ADDR in Infisical}"
       RLE_SQLITE_PATH: "${RLE_SQLITE_PATH:?set RLE_SQLITE_PATH in Infisical}"
       RLE_MIGRATIONS_PATH: "${RLE_MIGRATIONS_PATH:?set RLE_MIGRATIONS_PATH in Infisical}"
-      RLE_LOG_LEVEL: "${RLE_LOG_LEVEL?set RLE_LOG_LEVEL in Infisical}"
+      RLE_LOG_LEVEL: "${RLE_LOG_LEVEL:?set RLE_LOG_LEVEL in Infisical}"
       RLE_LOG_JSON: "${RLE_LOG_JSON:?set RLE_LOG_JSON in Infisical}"
       RLE_KAFKA_BROKERS: "${RLE_KAFKA_BROKERS:?set RLE_KAFKA_BROKERS in Infisical}"
       RLE_KAFKA_GROUP_ID: "${RLE_KAFKA_GROUP_ID:?set RLE_KAFKA_GROUP_ID in Infisical}"
